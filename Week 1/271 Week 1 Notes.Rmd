@@ -1,0 +1,528 @@
+---
+title: "271 Notebook"
+output: html_document
+date: "2023-01-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages('fastR2')
+install.packages('binom')
+library("fastR2")
+library('binom')
+```
+
+# Bernoulli Distribution
+
+### PMF
+
+$$
+P(Y=y) = \pi^y(1-\pi)^{1-\pi}
+$$
+
+```{r}
+dbinom ( x = 1 , size = 5 , prob = 0.6) #PMF / Probability of getting only 1 success
+dbinom ( x = 0:5 , size = 5 , prob = 0.6) #0 - 5 PMF/Probability of successes
+```
+
+```{r}
+pmf <- dbinom ( x = 0:5 , size = 5 , prob = 0.6)
+save <- data.frame ( w = 0:5 , prob = round( x = pmf , digits = 4) ) #Setting up for plotting
+save
+```
+
+```{r}
+ plot (x = save$w , y = save$prob , type = "h" , xlab = " w " , ylab =
+" P ( W = w ) " , main = " Plot of a binomial PMF for n =5 , pi =0.6" ,
+panel.first = grid ( col = "gray" , lty = "dotted") , lwd = 3)
+# type "h" to indicate a bar up to the PMF
+abline ( h = 0)
+```
+
+## Monte Carlo of Bernoulli Distribution
+
+```{r}
+set.seed (4848)
+bin5 <- rbinom ( n = 1000 , size = 5 , prob = 0.6) #Monte Carlo simulation
+bin5 [1:11]
+#rbinom differs from dbinom. Rbinom gets the specific amount of successes "w" with a sample size of "size" while dbinom returns the PMF of a particular value
+```
+
+# PMF of Binomial R.V.
+
+$$
+P(W = w) = {n \choose w}\pi^w(1-\pi)^{n-w}
+$$
+
+### Expectation and Variance of Bernoulli
+
+$$
+E(W) = n\pi
+$$
+
+$$
+Var(W) = n\pi(1-\pi)
+$$
+
+```{r}
+mean ( bin5 ) #Close to the actual E[Y] 
+var ( bin5 ) #Close to the actual Var[Y]
+```
+
+```{r}
+ table ( x = bin5 )
+hist ( x = bin5 , main = " Binomial with n =5 , pi =0.6 , 1000 bin .
+observations " , probability = TRUE , breaks = c ( -0.5:5.5) , ylab
+= " Relative frequency ")
+#Very similar to the actual PMF
+#Probability = TRUE makes the y axis be the relative frequency and not the actual frequency
+```
+
+# Maximum Likelihood Estimation and Likelihood Function for Bernoulli
+
+## Likelihood formula when given all results
+
+$$
+L(\pi|y_1, ...y_n) = P(Y_1 = y_1) \times...\times P(Y_n = y_n) = \pi^w(1-\pi)^{n-w}
+$$
+
+## Likelihood formula when given only successes
+
+$$
+L(\pi|w) = P(W = w) = {n\choose w}\pi^w(1-\pi)^{n-w}
+$$
+
+## MLE of Bernoulli
+
+$$
+\hat{\pi} = w/n
+$$
+
+## Likelihood ratio test
+
+$$
+\Lambda = 
+\frac{MLE \; under \; H_0}{MLE\; under\; H_0 \; or \; H_A}
+$$
+
+Then you gotta do log and stuff to it but it's hard to write. But you do so to fit it to a chisquare distribution. Used to perform hypothesis test with more than one parameter of interest.
+
+# Wald's Confidence Interval
+
+$$
+\hat{\pi} - Z_{1-a/2}\sqrt{\hat{\pi}(1-\hat{\pi})/n} < \pi < 
+\hat{\pi} + Z_{1-a/2}\sqrt{\hat{\pi}(1-\hat{\pi})/n}
+$$
+
+Suppose w = 4 out of n = 10 trials. The 95% Wald confidence interval for \$\\Pi\$ is
+
+```{r}
+w <- 4
+n <- 10
+alpha <- 0.05
+pi.hat <- w/n
+var.wald <- pi.hat * (1 - pi.hat) / n
+
+lower <- pi.hat - qnorm(p = 1-alpha/2) * sqrt(var.wald)
+upper <- pi.hat + qnorm(p = 1-alpha/2) * sqrt(var.wald)
+round(data.frame(lower, upper), 4)
+
+#OR
+
+round(pi.hat + qnorm(p = c(alpha/2, 1-alpha/2)) * sqrt(var.wald), 4) 
+```
+
+## Wilson and Agresti-Coull intervals
+
+##### Use Wilson when n \< 40
+
+$$
+\tilde{\pi} = \frac{w+Z_{1-a/2}^2/2}
+ {n+Z_{1-a/2}^2}
+$$
+
+$$
+\tilde{\pi} \pm \frac{w+Z_{1-a/2}\sqrt{n}}
+ {n+Z_{1-a/2}^2}\sqrt{\tilde{\pi}(1-\tilde{\pi}) + Z^2_{1-a/2}/4n}
+$$
+
+##### Use Agresti-Coull when n \>= 40
+
+$$
+\tilde{\pi} - Z_{1-a/2}\sqrt{\frac{\tilde{\pi}(1-\tilde{\pi})}{n+Z^2_{1-a/2}}} < \pi < 
+\tilde{\pi} + Z_{1-a/2}\sqrt{\frac{\tilde{\pi}(1-\tilde{\pi})}{n+Z^2_{1-a/2}}}
+$$
+
+```{r}
+#estimated pi
+p.tilde <- (w + qnorm(p = 1-alpha/2)^2 / 2) / (n + qnorm(p = 1-alpha/2)^2)
+p.tilde
+```
+
+```{r}
+# Wilson C.I.
+round(p.tilde + qnorm(p = c(alpha/2, 1-alpha/2)) * sqrt(n) / (n + qnorm(p = 1-alpha/2)^2) * sqrt(pi.hat*(1-pi.hat) + qnorm(p = 1-alpha/2)^2/(4*n)), 4)
+
+#OR
+wilson.ci(4, n = 10, conf.level = 0.95)
+```
+
+```{r}
+# Agresti - Coull C.I.
+var.ac <- p.tilde *(1 - p.tilde ) / ( n + qnorm ( p = 1 - alpha /2) ^2)
+round ( p.tilde + qnorm ( p = c ( alpha /2 , 1 - alpha /2) ) *
+sqrt ( var.ac ) , 4)
+```
+
+# Convenient Cheat Code for Calculating CI from All Methods
+
+```{r}
+binom.confint(x = w, n = n, conf.level = 1-alpha, methods = 'all')
+```
+
+# Finding the True Confidence Level for Wald Interval
+
+n = 40, pi = 0.157, alpha = 0.05
+
+```{r}
+pi <- 0.157 #changing this will change the true CI
+alpha <- 0.05
+n <- 40 #Changing this will also change the CI
+w <- 0:n
+pi.hat <- w/n
+pmf <- dbinom(x = w, size =n, prob = pi) #Probability of each possible w
+
+#Calculating the 95% wald interval for each possible valeus of w
+var.wald <- pi.hat*(1-pi.hat) / n
+lower <- pi.hat - qnorm ( p = 1 - alpha /2) * sqrt ( var.wald )
+upper <- pi.hat + qnorm ( p = 1 - alpha /2) * sqrt ( var.wald )
+save <- ifelse(test = pi >lower, yes = ifelse(test = pi<upper, yes = 1, no = 0), no = 0)
+data.frame(w, pi.hat, round(data.frame(pmf, lower, upper), 4), save)[1:13,]
+
+#Basically, our proposed 95% Wald CI actually has an 87.5% CI. The probability that a binomial RV is between 4 and 11 with n = 40 and pi = 0.157 is 0.8759
+sum ( save * pmf ) 
+sum ( dbinom ( x = 4:11 , size = n , prob = pi ))
+
+
+
+```
+
+## Estimated True Confidence Level for Wald Interval with Monte Carlo
+
+n = 40, pi = 0.157, alpha = 0.05
+
+```{r}
+ numb.bin.samples <- 1000 # Binomial samples of size 
+ 
+set.seed (4516)
+w <- rbinom (n = numb.bin.samples , size = n , prob = pi ) #creating a bunch of binomial distributions
+
+pi.hat <- w/n
+
+#Calculating the 95% wald interval from each generated binomial distribution and their respective pi.hat
+var.wald <- pi.hat*(1-pi.hat) / n
+lower <- pi.hat - qnorm ( p = 1 - alpha /2) * sqrt ( var.wald )
+upper <- pi.hat + qnorm ( p = 1 - alpha /2) * sqrt ( var.wald )
+data.frame (w, pi.hat, lower , upper ) [1:10 ,]
+save <- ifelse ( test = pi > lower , yes = ifelse ( test = pi < upper ,
+yes = 1 , no = 0) , no = 0)
+
+save [1:10]
+
+mean ( save )
+
+counts <- table(w)
+counts
+sum(counts[4:11]) / numb.bin.samples #same thing including 1 / all
+```
+
+#### True confidence level plot
+
+n = 40, a = 0.05
+
+```{r}
+alpha <- 0.05
+n <- 40
+w <- 0:n
+pi.hat <- w/n
+pi.seq <- seq ( from = 0.001 , to = 0.999 , by = 0.0005)
+
+#Wald
+var.wald <- pi.hat *(1 - pi.hat ) / n
+lower.wald <- pi.hat - qnorm (p = 1 - alpha /2) * sqrt ( var.wald )
+upper.wald <- pi.hat + qnorm (p = 1 - alpha /2) * sqrt ( var.wald )
+
+# Save true confidence levels in a matrix
+save.true.conf <- matrix ( data = NA , nrow = length ( pi.seq ) , ncol
+= 2)
+
+# Create counter for the loop
+counter <- 1
+ 
+# Loop over each pi
+for ( pi in pi.seq ) {
+pmf <- dbinom ( x = w , size = n , prob = pi )
+save.wald <- ifelse ( test = pi > lower.wald , yes = ifelse ( test =
+pi < upper.wald , yes = 1 , no = 0) , no = 0)
+wald <- sum ( save.wald * pmf )
+save.true.conf [ counter , ] <- c ( pi , wald )
+# print ( save.true.conf [counter ,])
+counter <- counter +1
+}
+ 
+plot ( x = save.true.conf [ ,1] , y = save.true.conf [ ,2] , main =
+"Wald" , xlab = expression ( pi ) , ylab = " True confidence level " ,
+type = "l" , ylim = c (0.85 ,1) )
+
+abline ( h = 1 - alpha , lty ='dotted')
+
+ 
+```
+
+# 1.2 Two Binary Variables
+
+## Simulating counts in a contingency table
+
+𝞹1 = 0.2, pi2 = 0.4, n1 = 10, n2 = 10
+
+```{r}
+pi1 <- 0.2
+pi2 <- 0.4
+n1 <- 10
+n2 <- 10
+
+set.seed(8191)
+w1 <- rbinom(n = 1, size = n1, prob = pi1) #rbinom returns the actual result
+w2 <- rbinom(n = 1, size = n2, prob = pi2)
+
+c.table <- array(data = c(w1, w2, n1-w1, n2-w2), dim = c(2,2),
+                 dimnames = list(Group = c(1,2), Response = c(1,2)))
+c.table
+
+c.table[1,1] #w1
+
+c.table[1,2] #n1 - w1
+
+c.table[1,] #w1 and n1-w1
+
+sum(c.table[1,]) #n1
+```
+
+Lets say we already have the count values for a two-way contingency table
+
+```{r}
+c.table <- array(data = c(251, 48, 34, 5), dim = c(2,2),
+                 dimnames = list(First = c('made', 'missed'), Second = 
+                                   c('made', 'missed')))
+c.table
+
+#Now to estimate probability of success for each group
+rowSums(c.table) # n1 and n2
+pi.hat.table <- c.table/rowSums(c.table)
+pi.hat.table
+```
+
+\^ This is just a sample of Larry Bird's free throws. We want to generalize the population of all free throw attempts by Larry Bird.
+
+To do so, we have to infer the difference of the success rates between these groups through confidence intervals
+
+```{r}
+alpha <- 0.05
+pi.hat1 <- pi.hat.table[1,1]
+pi.hat2 <- pi.hat.table[2,1]
+
+#Wald
+var.wald <- pi.hat1*(1-pi.hat1) / sum(c.table[1,]) +
+  pi.hat2*(1-pi.hat2) / sum(c.table[2,])
+
+pi.hat1 - pi.hat2 + qnorm(p = c(alpha/2, 1-alpha/2))*(sqrt(var.wald))
+
+# Agresti-Caffo
+pi.tilde1 <- (c.table[1,1] + 1) / (sum(c.table[1,]) + 2)
+pi.tilde2 <- (c.table[2, 1] + 1) /(sum(c.table[2,]) + 2)
+
+var.AC <- pi.tilde1 *(1 - pi.tilde1 ) / ( sum ( c.table [1 ,]) + 2) +
+  pi.tilde2 *(1 - pi.tilde2 ) / ( sum ( c.table [2 ,]) + 2)
+
+pi.tilde1 - pi.tilde2 + qnorm ( p = c ( alpha /2 , 1 - alpha /2) ) *sqrt(var.AC)
+```
+
+### True confidence level of joint bernoulli CI
+
+```{r}
+alpha <- 0.05
+pi1 <- 0.2
+pi2 <- 0.4
+n1 <- 10
+n2 <- 10
+
+
+ # All possible combinations of w1 and w2
+w.all <- expand.grid ( w1 = 0: n1 , w2 = 0: n2 )
+
+
+# All possible combinations of pi ^ _1 and pi ^ _2
+pi.hat1 <- (0: n1 ) / n1
+pi.hat2 <- (0: n2 ) / n2
+pi.hat.all <- expand.grid ( pi.hat1 = pi.hat1 , pi.hat2 = pi.hat2 )
+
+
+ # Find joint probability for w1 and w2
+prob.w1 <- dbinom ( x = 0: n1 , size = n1 , prob = pi1 )
+prob.w2 <- dbinom ( x = 0: n2 , size = n2 , prob = pi2 )
+prob.all <- expand.grid ( prob.w1 = prob.w1 , prob.w2 = prob.w2 )
+pmf <- prob.all$prob.w1 * prob.all$prob.w2
+
+# P ( W1 = w1 , W2 = w2 )
+(data.frame(w.all , pmf = round(pmf ,4)))
+
+```
+
+We can now calculate the true confidence level with these probabilities
+
+```{r}
+var.wald <- pi.hat.all[,1] * (1-pi.hat.all[,1]) /n1 +
+  pi.hat.all[,2] * (1-pi.hat.all[,2]) / n2
+lower <- pi.hat.all[,1] - pi.hat.all[,2] - qnorm(p = 1-alpha/2) *sqrt(var.wald)
+upper <- pi.hat.all[,1] - pi.hat.all[,2] + qnorm(p = 1-alpha/2) * sqrt(var.wald)
+save <- ifelse(test = pi1-pi2 > lower, yes = ifelse(test = pi1-pi2 < upper, yes = 1, no = 0), no = 0)
+
+sum(save*pmf) #Calculating true CI
+
+data.frame(w.all, round(data.frame(pmf, lower, upper), 4), save)[1:15,]
+```
+
+```{r}
+# Estimated true confidence level holding pi2 fixed at 0.3
+
+  numb.bin.samples<-10000  # Number of binomial samples - changed to reduce simulation variability (makes plot look nicer)
+
+  pi1seq<-seq(from = 0.001, to = 0.999, by = 0.0005)
+  # pi1seq<-0.2  # Testing
+  # pi1seq<-seq(from = 0.1, to = 0.9, by = 0.1)  # Testing
+
+  # Save true confidence levels in a matrix
+  save.true.conf<-matrix(data = NA, nrow = length(pi1seq), ncol = 3)
+
+  # Create counter for the loop
+  counter<-1
+
+  set.seed(2114)
+  # Loop over each pi1 that the true confidence level is calculated on
+  for(pi1 in pi1seq) {
+   
+    w1<-rbinom(n = numb.bin.samples, size = n1, prob = pi1)
+    w2<-rbinom(n = numb.bin.samples, size = n2, prob = pi2)
+
+    pi.hat1<-w1/n1
+    pi.hat2<-w2/n2
+
+    # Wald
+    lower<-pi.hat1 - pi.hat2 - qnorm(p = 1-alpha/2) *
+      sqrt(pi.hat1*(1-pi.hat1) / n1 + pi.hat2*(1-pi.hat2) / n2)
+    upper<-pi.hat1 - pi.hat2 + qnorm(p = 1-alpha/2) *
+      sqrt(pi.hat1*(1-pi.hat1) / n1 + pi.hat2*(1-pi.hat2) / n2)
+    save<-ifelse(test = pi1-pi2 > lower,
+                 yes = ifelse(test = pi1-pi2 < upper, yes = 1, no = 0), no = 0)
+    wald<-mean(save)
+
+    # Agresti-Caffo
+    pi.tilde1<-(w1+1)/(n1+2)
+    pi.tilde2<-(w2+1)/(n2+2)
+    lower.AC<-pi.tilde1 - pi.tilde2 - qnorm(p = 1-alpha/2) *
+            sqrt(pi.tilde1*(1-pi.tilde1) / (n1+2) +
+              pi.tilde2*(1-pi.tilde2) / (n2+2))
+    upper.AC<-pi.tilde1 - pi.tilde2 + qnorm(p = 1-alpha/2) *
+            sqrt(pi.tilde1*(1-pi.tilde1) / (n1+2) +
+              pi.tilde2*(1-pi.tilde2) / (n2+2))
+    save.AC<-ifelse(test = pi1-pi2 > lower.AC,
+                    yes = ifelse(test = pi1-pi2 < upper.AC, yes = 1, no = 0), no = 0)
+    AC<-mean(save.AC)
+  
+    save.true.conf[counter,]<-c(pi1, wald, AC)
+    counter<-counter+1
+  }
+  
+  # Plot
+
+  plot(x = save.true.conf[,1], y = save.true.conf[,2], xlab = expression(pi[1]),
+    ylab = "Estimated true confidence level", type = "l", ylim = c(0.85,1), lty = "solid", col = "blue")
+  lines(x = save.true.conf[,1], y = save.true.conf[,3], lty = "dashed", col = "red")
+  abline(h = 1-alpha, lty = "dotted")
+  legend(x = 0.1, y = 0.88, legend = c("Wald", "Agresti-Caffo"), lty = c("solid", "dashed"),
+    bty = "n", col = c("blue", "red"))
+```
+
+Testing difference of two populations
+
+```{r}
+prop.test ( x = c.table , conf.level = 0.95 , correct = FALSE )
+```
+
+### Relative Risk when pi1 - pi2 are small
+
+```{r}
+# Create contingency table - notice the data is entered by columns
+c.table<-array(data = c(57, 142, 200688, 201087), dim = c(2,2), dimnames = list(Treatment = c("vaccine", "placebo"),
+              Result = c("polio", "polio free")))
+c.table
+
+# Find the estimated pi^j
+pi.hat.table<-c.table/rowSums(c.table)
+pi.hat.table
+
+sum(pi.hat.table[1,])
+pi.hat1<-pi.hat.table[1,1]
+pi.hat2<-pi.hat.table[2,1]
+
+####################################################
+# Relative risk
+
+  # Relative risk where success = "polio"
+  round(pi.hat1/pi.hat2, 4) #Estimated probabilityy of contracting polio is 0.4 times as large
+  round(1/(pi.hat1/pi.hat2), 4)
+
+  alpha<-0.05
+  n1<-sum(c.table[1,])
+  n2<-sum(c.table[2,])
+
+  # Wald confidence interval
+  var.log.rr<-(1-pi.hat1)/(n1*pi.hat1) + (1-pi.hat2)/(n2*pi.hat2)
+  ci<-exp(log(pi.hat1/pi.hat2) + qnorm(p = c(alpha/2, 1-alpha/2)) * sqrt(var.log.rr))
+  round(ci, 4)
+  rev(round(1/ci, 4))  # inverted
+
+  # Could also calculate the variance like this:
+  1/c.table[1,1] - 1/sum(c.table[1,]) + 1/c.table[2,1] - 1/sum(c.table[2,])
+```
+
+### Odds Ratio (OR)
+
+```{r}
+# Create contingency table - notice the data is entered by columns
+c.table<-array(data = c(57, 142, 200688, 201087), dim = c(2,2), dimnames = list(Treatment = c("vaccine", "placebo"),
+              Result = c("polio", "polio free")))
+c.table
+
+OR.hat <- c.table[1,1] * c.table[2,2] / (c.table[2,1] * c.table[1,2])
+
+round(OR.hat, 4)#Estimated odds of contracting polio are 0.4 times as large when the vaccine is given than wehn the placebo is given
+
+round(1/OR.hat,4) #Inverse: Estimated odds of being polio free are 2.49 times as large as when the vaccine is given than when the placebo is given
+
+alpha <- 0.05
+var.log.or <-1/c.table[1,1] + 1/c.table[1,2] + 1/c.table[2,1] + 1/c.table[2,2]
+OR.CI <- exp(log(OR.hat) + qnorm(p = c(alpha/2, 1-alpha/2)) * sqrt(var.log.or))
+
+round(OR.CI, 2) 
+
+rev(round(1/OR.CI, 2)) #reverses the vector so its increasing and easier to read
+```
+
+In both examples of the RR and OR, their estimations are similar. This is because:
+
+-   Probability of polio contraction is very low in both groups
+
+-   Sample size is very large
+
+In smaller samples, the estimated RR and OR would still be similar but the confidence intervals would have differed. This would be due to the difference in variances.
