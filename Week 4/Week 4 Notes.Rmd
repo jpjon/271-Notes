@@ -1,0 +1,597 @@
+# Multinomial Probability Distribution
+
+Now we don't just have success or not success, we got a bunch of options.
+
+Let Y be the categorical response random variable with level j = 1,....J where each category has probability $\large \pi_j = P(Y = j)$ such that $\large \sum^J_{j=1}\pi_j = 1$. If there are $n$ identical trials with responses $\large Y_1,…,Y_n$ , then we can define random variables $\large N_j, j = 1,…,J$ such that $\large N_j$ counts the number of trials responding with category j.
+
+So $\large N_j = \sum^n_{i = 1}(Y_i = j)$. Also with $\large n$ being a response... then for category j $\large \sum^j_{j = 1} n_j = n$.
+
+#### Multinomial PDF
+
+$$
+\large P(N_1 = n_1,...,N_j = n_j) = \frac{n!}{\Pi^J_{j=1}n_j!}\Pi^J_{j=1}\pi^{n_j}_j
+$$
+
+Where j is a category. So with this, you figure out the probability of the j response. If J=2, then there's only two responses and thus it's a binomial distribution.
+
+#### MLE of Multinomial $\large \pi$
+
+$$
+\large \hat{\pi} = \frac{n_j}{n}
+$$
+
+### Multinomial Simulation Example:
+
+With 100 trials...
+
+$$
+\large \pi_1 =0.25, \pi_2 = 0.35, \pi_3 = 0.2, \pi_4 =0.1, \pi_5 = 0.1
+$$
+
+```{r}
+pi.j <- c(0.25, 0.35, 0.2, 0.1, 0.1) #all the pi's for each j
+set.seed(2195)
+n.j <- rmultinom(n =1, size = 1000, prob = pi.j) #n = 1 means one set of size = 1000 trials. this would return all the n's for each j
+data.frame(n.j, pihat.j = n.j/1000, pi.j)
+```
+
+```{r}
+pi.j <- c(0.25, 0.35, 0.2, 0.1, 0.1) #all the pi's for each j
+set.seed(9182)
+n.j <- rmultinom(n =5, size = 1000, prob = pi.j) #n = 5 means five set of size = 1000 trials. this would return all the n's for each j from each trial
+n.j
+```
+
+This get's complicated:
+
+#### One multinomial distribution
+
+Think of there being a big contingency table. The left vertical X will be values for an X variable. The horizontal upper Y will be responses and their values. Let's say X is a variable with values child, teen, and adult while Y is a variable with values elementary, middle, and high. You know what nvm.
+
+PMF for N_11,...NIJ
+
+$$
+\large P(N_{11} = n_{11},...N_{IJ} = n_{IJ}) = \frac{n!}{\Pi^I_{i=1}\Pi^J_{j=1}n_{ij}!}\Pi^I_{i = 1}\Pi^J_{j=1}\pi^{n_{ij}}_{ij}
+$$
+
+Which is also the likelihood function for a sample of size n\^
+
+You can take the marginal distributions for X and Y as well through some math.
+
+#### I multinomial distributions
+
+$$
+\large P(N_{i1} = n_{i1},...N_{iJ} = n_{iJ}|N_{i+} = n_{i+}) = \frac{n!}{\Pi^I_{i=1}n_{ij}!}\Pi^J_{j=1}\pi^{n_{ij}}_{ij}
+$$
+
+For a given i, or for a given X value, then you ca find the probability of it having a certain Y value, or a certain j value.
+
+Likelihood for parameters:
+
+$$
+\large \Pi_{i = 1}^I \frac{n_{i+}!}{\Pi^J_{j = 1}n_{ij}!}\Pi^J_{j=1}\pi^{n_{ij}}_{j|i}
+$$
+
+As a result, this model is often referred to as the product multinomial model. The MLE of $\large \pi_{j|i}$ is \$\\large \\hat{\\pi}\_{j\|i} = n\_{ij}/n\_{i+}\$. Or the same thing as $\large P(Y = j|X=i) = (X = i, Y=j)/ P(X-i)$ .
+
+##### One multinomial simulated sample
+
+```{r}
+#Probabilities entered by column for array()
+pi.ij <- c(0.2, 0.3, 0.2, 0.1, 0.1, 0.1)
+pi.table <- array(data = pi.ij, dim = c(2,3), dimnames = list(X = 1:2, Y = 1:3))
+pi.table #pi_ij
+```
+
+```{r}
+set.seed(9812)
+save <- rmultinom(n = 1, size = 1000, prob = pi.ij)
+c.table1 <- array(data = save, dim = c(2,3), dimnames = list(X = 1:2, y = 1:3))
+c.table1
+c.table1/sum(c.table1)
+```
+
+##### I multinomial simulated sample
+
+```{r}
+pi.cond <- pi.table/rowSums(pi.table) #basically making each X value sum up to 1 in probability
+pi.cond #pi_j|i
+
+set.seed(8111)
+save1 <- rmultinom(n = 1, size = 400, prob = pi.cond[1,])
+save2 <- rmultinom(n = 1, size = 600, prob = pi.cond[2,])
+
+c.table2 <- array(data = c(save1[1], save2[1], save1[2], save2[2], save1[3], save2[3]), dim = c(2,3), dimnames = list(X = 1:2, Y = 1:3))
+c.table2
+
+rowSums(c.table2)
+c.table2/rowSums(c.table2) #Estimated of pi_j|i
+
+round(c.table1/rowSums(c.table1),4) # From 1 multinomial
+```
+
+### Test for independence
+
+$$
+\large \begin{align}
+&H_0 \;: \; \pi_{ij} = \pi_{i +}\pi_{+j} \;for\;each\;i,j\\
+&H_a \; : \; \pi_{ij}\neq \pi_{i +} \pi_{+j} \; for \; some\; i,j 
+\end{align}
+$$
+
+Performed by using a Pearson chi-square test and a LRT.
+
+Test statistic is:
+
+$$
+\large X^2 = \sum^I_{i = 1}\sum^J_{j=1}\frac{(n_{ij} - n_{i+}n_{ij}/n)^2}{n_{i+}n_{ij}/n}
+$$
+
+Reject null hypothesis of independence between X and Y when:
+
+$$
+\large X > \chi^2_{(I-1)(J-1), 1-\alpha}
+$$
+
+The likelihood ratio is the same.
+
+$$
+\large -2log(\Lambda) = 2\sum^I_{i = 1}\sum^J_{j = 1}n_{ij}log\left(\frac{n_{ij}}{n_{i+}n_{ij}/n}\right)
+$$
+
+```{r}
+diet <- read.csv(file = "./Fiber.csv")
+head(diet)
+```
+
+```{r}
+diet$fiber <- factor(x = diet$fiber, levels = c("none", "bran", "gum", "both"))
+diet$bloat <- factor(x = diet$bloat, levels = c("none", "low", "medium", "high"))
+diet.table <- xtabs(formula = count ~ fiber + bloat, data = diet)
+diet.table
+```
+
+We can test if bloating severity is related to the type of fiber by test of independence. There are three ways to do this:
+
+```{r}
+
+ind.test <- chisq.test(x = diet.table, correct = FALSE)
+ind.test
+
+library(package = vcd)
+assocstats(x = diet.table)
+
+class(diet.table)
+summary(diet.table)
+qchisq(p = 0.95, df = 9)
+```
+
+We get the warning that chi-squared approx. may be incorrect because $\large n_{i+}n_{+j}/n >5$ is not true.
+
+```{r}
+#Expected cell counts under independence
+ind.test$expected
+```
+
+Unfortunately, odds ratios and and examining the residuals are not that great of looking at association between X and Y. Still, they can be helpful.
+
+```{r}
+#Residuals of observed cell count vs expected under deviance under a stand normal. If += 2, then its unnusual. We look if things increase or nota s well. If large and the opposite sign in one row, then points to a violation of independence
+ind.test$stdres
+```
+
+## Nominal response regression models
+
+Where we model the probabilities of the response variable Y with response categories j = 1,..., J using explanatory variables x1,...xp
+
+Baseline category logits is when you compare j = 1 to any other j = 2,...J.
+
+$$
+\large log(\pi_j/\pi_1) = \beta_{j0} + \beta_{j1}x
+$$
+
+We can also compare to other baselines:
+
+$$
+\large log(\pi_2/\pi_3) = \beta_{20} - \beta_{30} + x(\beta_{21} - \beta_{31})
+$$
+
+We find a particular pi for a j with:
+
+$$
+\large \pi_j = \frac{exp(\beta_{j0} + \beta_{j1}x_1 + ...+ \beta_{jp}x_p)}{1+\sum^J_{j=2}exp(\beta_{j0} + \beta_{j1}x_1+...+\beta_{jp}x_p)}
+$$
+
+```{r}
+wheat <- read.csv(file = "./wheat.csv")
+
+head(wheat, n = 3)
+tail(wheat, n = 3)
+```
+
+```{r}
+ # Parallel coordinate plot
+
+    library(package = MASS)  # Location of parcoord() function
+
+
+    # Reorder variables because class is binary (may distort plot)
+    # Create indicator variable for class
+    wheat2<-data.frame(kernel = 1:nrow(wheat), wheat[,2:6],  
+           class.new = ifelse(test = wheat$class == "hrw", yes = 0, no = 1))
+    head(wheat2)
+
+    # Colors by condition:
+    wheat.colors<-ifelse(test = wheat$type=="Healthy", yes = "black", 
+                    no = ifelse(test = wheat$type=="Sprout", yes = "red", no = "green"))
+    # Line type by condition:
+    wheat.lty<-ifelse(test = wheat$type=="Healthy", yes = "solid", 
+                    no = ifelse(test = wheat$type=="Sprout", yes = "longdash", no = "dotdash"))
+    
+    parcoord(x = wheat2, col = wheat.colors, lty = wheat.lty)  # Plot
+    legend(x = 6.15, y = 0.75, legend = c("Healthy", "Sprout", "Scab"), lty = c("solid", "longdash", "dotdash"),
+      col=c("black", "red", "green"), cex=0.8, bty="n")
+
+   
+```
+
+```{r}
+levels(wheat$type) # The 3 response categories
+
+library(package = nnet)
+mod.fit <- multinom(formula = type ~ class + density + hardness + size + weight + moisture , data = wheat)
+
+summary(mod.fit) # healthy isnt on there since it is base level
+```
+
+So this means:
+
+$$
+\large \begin{align}
+&log(\hat{\pi}_{Scab}/ \hat{\pi}_{Healthy}) = 30.55 - 0.65srw - 21.60 density- 0.016 hardness + 1.07size - 0.29 weight + 0.11 moisture
+\\
+&log(\hat{\pi}_{Sprout}/ \hat{\pi}_{Healthy}) = 19.17- 0.22srw- 15.12 density- 0.021 hardness + 0.88size - 0.047 weight -0.043 moisture
+\end{align}
+$$
+
+```{r}
+library(package = car)
+Anova(mod.fit)
+```
+
+```{r}
+pi.hat <- predict(object = mod.fit, newdata = wheat, type = 'probs')
+head(pi.hat)
+```
+
+Wald CI for probabilities
+
+```{r}
+#Obtain observation values
+x1 <- 0
+x2 <- wheat[1,2]
+x3 <- wheat [1,3]
+x4 <- wheat[1,4]
+x5 <- wheat[1,5]
+x6 <- wheat[1,6]
+
+g.healthy <- "1/(1+exp(b20 + b21*x1 + b22 * x2 + b23*x3 + b24*x4 + b25*x5 + b26*x6) + exp(b30 + b31*x1 + b32*x2 + b33*x3 + b34*x4 + b35*x5 + b36*x6))"
+
+calc.healthy <- deltaMethod(object = mod.fit, g = g.healthy, parameterNames = c("b20", "b21", "b22", "b23", "b24", "b25", "b26", "b30", "b31", "b32", "b33", "b34", "b35", "b36"))
+
+calc.healthy$Estimate #pi-hat_Healthy
+
+calc.healthy$SE #sqrt(Var-hat(pi-hat_Healthy))
+
+alpha <- 0.05
+calc.healthy$Estimate + qnorm(p = c(alpha/2, 1-alpha/2)) * calc.healthy$SE
+```
+
+### Odds ratios
+
+Consider the model:
+
+$$
+\large log(\pi_j/\pi_1) = \beta_{j0} + \beta_{j1} 
+$$
+
+for j = 2,... J
+
+The odds of a category j response vs a category 1 response is \$\\large exp(\\beta\_{j0} + \\beta\_{j1}x)\$. Thus, the odds of a category j vs. a category 1 response change by $\large e^{c\beta_{j1}}$ times for every c-unit increase in x.
+
+Similarily, for any odds ratio besides the base level:
+
+$$
+\large e^{c(\beta_{j1} - \beta_{j'1})}
+$$
+
+```{r}
+sd.wheat <- apply (X = wheat[, -c(1,7,8)], MARGIN = 2, FUN = sd) #1 sd to choose c
+c.value <- c(1, sd.wheat) #class = 1 is first value
+round(c.value, 2) #values of c for the base level 1(healthy)
+```
+
+```{r}
+#beta.hat_jr for r =1, ..., 6 and j = 2,3, where beta.hat_jr = coefficients(mod.fit[j-1,r+1])
+beta.hat2 <- coefficients(mod.fit)[1, 2:7]
+beta.hat3 <- coefficients(mod.fit)[2,2:7]
+
+#Odds ratios for j = 2 vs j =1 (scab vs healthy)
+round(exp(c.value*beta.hat2), 2)
+
+round(1/exp(c.value*beta.hat2), 2)
+
+#Odds ratios for j = 3 vs. j = 1 (sprout vs healthy)
+round(exp(c.value*beta.hat3), 2)
+
+round(1/exp(c.value*beta.hat3), 2)
+```
+
+```{r}
+class(mod.fit)
+```
+
+```{r}
+methods(class = multinom)
+```
+
+```{r}
+sqrt(vcov(mod.fit)[2,2]) #sqrt(Var-hat(beta-hat_21))
+```
+
+Wald CI of Odds Ratios
+
+```{r}
+conf.beta <- confint(object = mod.fit, level = 0.95)
+round(conf.beta,2) # Results are in a 3D array
+```
+
+```{r}
+ci.OR2 <- exp(c.value*conf.beta[2:7, 1:2, 1])
+ci.OR3 <- exp(c.value*conf.beta[2:7, 1:2 ,2])
+
+round(data.frame(low = ci.OR2[,1], up = ci.OR2[,2]), 2)
+round(data.frame(low = 1/ci.OR2[,2], up = 1/ci.OR2[,1]), 2)[c(2,5),]
+```
+
+```{r}
+
+round(data.frame(low = ci.OR3[,1], up = ci.OR3[,2]), 2)
+round(data.frame(low = 1/ci.OR3[,2], up = 1/ci.OR3[,1]), 2)[c(2,5),]
+```
+
+With 95% confidence, the odds of a scab instead of a healthy kernel change by 7.64 to 38.00 times when density is decreased by 0.13 holding the other variables constant. Also, with 95% confidence, the odds of a sprout instead of a healthy kernel change by 3.57 and 14.82 times when desnity is decreased by 0.13 holding the other variables constant.
+
+#### Contingency tables
+
+```{r}
+library(package = nnet)
+mod.fit.nom <- multinom(formula = bloat ~ fiber, weights = count, data = diet) #use weights = count because each row of diet represents contingency table counts, not observaitons from individual trials
+summary(mod.fit.nom)
+```
+
+$$
+\large log(\pi_j/\pi_{none}) = \beta_{j0} + \beta_{j1}bran + \beta_{j2}gum + \beta_{j3}both
+$$
+
+```{r}
+#test of independence
+library(package = car)
+Anova(mod.fit.nom)
+```
+
+This proves that there is some dependence between type of fiber and severity of bloating.
+
+Estimated log_odds comparing low bloating severity category to no bloating:
+
+$$
+\large log(\hat{\pi}_{low}/ \hat{\pi}_{none}) = -0.41 - 0.15bran + 0.41 gum + 1.32both
+$$
+
+This means that using gum, with or without bran, leads to a larger odds of low bloating relative to no bloating than does using no fiber. Contrast to this, there is a small effect in the oppostie direction of using bran or no fiber.
+
+Computation of the estimated odds ratios:
+
+```{r}
+round(exp(coefficients(mod.fit.nom)[,-1]),2)
+```
+
+For example, the estimated odds of having low bloating rather than none is exp(-0.15) = 0.86 times as large for using bran as a fiber source than using no fiber at all.
+
+High and fibergum fiberboth have really large standard errors and odd ratios. Its because the contingency table has a value of 0 for these values and are not converging. A solution is to add 0.5 to the respective values in the contingency table.
+
+```{r}
+diet$count2 <- ifelse(test = diet$count == 0, yes = diet$count +0.5, no = diet$count)
+mod.fit.nom2 <- multinom(formula = bloat ~ fiber, weights = count2, data= diet)
+```
+
+```{r}
+sum.fit <- summary(mod.fit.nom2)
+round(sum.fit$coefficients, 4)
+round(sum.fit$standard.errors, 4)
+```
+
+Much better. All the other estimated parameters are similar as well. Estimated odds ratios is now:
+
+```{r}
+round(exp(coefficients(mod.fit.nom2)[,-1]), 2)
+conf.beta <- confint(object = mod.fit.nom2, level = 0.95)
+round(exp(conf.beta[2:4,,3]),2) #compare high to no bloating
+```
+
+```{r}
+#need to use factor to indicate it is a factor variable and not a char variable
+diet$bran <- factor(ifelse(test = diet$fiber == "bran" | diet$fiber == "both", yes = "yes", no = "no"))
+diet$gum <- factor(ifelse(test = diet$fiber == "gum" | diet$fiber == "both", yes = "yes", no = "no"))
+
+head(diet, n = 4)
+```
+
+```{r}
+mod.fit.nom.inter <- multinom(formula = bloat ~ bran + gum + bran:gum, weights = count, data = diet)
+summary(mod.fit.nom.inter)
+Anova(mod.fit.nom.inter)
+```
+
+## Ordinal response regression models
+
+Focus on modeling cumulative probabilities based on the category ordering
+
+The cumulative probability for category j of Y is$\large P(Y\le j) = \pi_1 + … +\pi_j$ for j = 1,....J. This is when $\large P(Y \le J) = 1$\
+Cumulative logits:
+
+$$
+\large logit(P(Y \le j)) = log\left(\frac{P(Y \le j)}{1-P(Y \le j)}\right) = log\frac{\pi_1+...+\pi_j}{\pi_{j+1}+...+\pi_J}
+$$
+
+**Proportional odds mode**l:
+
+$$
+\large logit(P(Y \le j)) = \beta_{j0} + \beta_1x_1+...+\beta_px_p, j = 1,..., J-1
+$$
+
+Or, for j = 1 as:
+
+$$
+\large P(Y \le j) = \frac{exp(\beta_{j0} + \beta_1x)}{1 + exp(\beta_{j0} + \beta_1x)}
+$$
+
+For just $\large \pi_j$:
+
+$$
+\large \pi_j = P(Y \le j) - P(Y \le j -1) = \frac{e^{\beta_{j0} + \beta_{1}x}}{1+e^{\beta_{j0} +\beta_1x}} - \frac{e^{\beta_{j-1,0} + \beta_{1}x}}{1+e^{\beta_{j-1,0} + \beta_1x}}
+$$
+
+```{r}
+levels(wheat$type)
+
+wheat$type.order <- factor(wheat$type, levels = c("Scab", "Sprout", "Healthy"))
+levels(wheat$type.order)
+
+library(package = MASS)
+mod.fit.ord <- polr(formula = type.order ~ class + density + hardness + size + weight + moisture, data = wheat, method = "logistic")
+summary(mod.fit.ord)
+
+library(package = car)
+Anova(mod.fit.ord)
+```
+
+Don't get why intercepts change but not explanatory variables.
+
+```{r}
+pi.hat.ord <- predict(object = mod.fit.ord, type = "probs")
+head(pi.hat.ord)
+```
+
+```{r}
+head(predict(object = mod.fit.ord, type = "class"))
+```
+
+Making a new funciton that returns a cov matrix and estiamtes so we can do inferences of estiamtes.
+
+```{r}
+    # Replacement function for deltaMethod.polr()
+    deltaMethod.polr2<-function(object, g)  {
+      # All beta^'s where the slope estimates are adjusted
+      beta.hat<-c(-object$coefficients, object$zeta)
+
+      # Count the number of slopes and intercepts
+      numb.slope<-length(object$coefficients)
+      numb.int<-length(object$zeta)
+
+      # Name corresponding parameters
+      names(beta.hat)<-c(paste("b", 1:numb.slope, sep=""), paste("b", 1:numb.int, "0", sep=""))
+
+      # Fix covariance matrix - All covariances between slopes and intercepts
+      #  need to be multiplied by -1
+      cov.mat<-vcov(object)
+      # Above diagonal
+      cov.mat[1:numb.slope, (numb.slope + 1):(numb.slope + numb.int)]<-
+        -cov.mat[1:numb.slope, (numb.slope + 1):(numb.slope + numb.int)]
+      # Below diagonal
+      cov.mat[(numb.slope + 1):(numb.slope + numb.int), 1:numb.slope]<-
+        -cov.mat[(numb.slope + 1):(numb.slope + numb.int), 1:numb.slope]
+
+      # deltaMethod.default() method function completes calculations
+      deltaMethod(object = beta.hat, g = g, vcov. = cov.mat)
+    }
+
+```
+
+Interval for healthy
+
+```{r}
+x1 <- 0; x2 <- wheat[1,2]; x3 <- wheat[1,3]
+x4 <- wheat[1,4]; x5 <- wheat[1,5]; x6 <- wheat[1,6]
+
+g.healthy <- "1 - exp(b20 + b1*x1 + b2*x2 + b3*x3 + b4*x4 + b5*x5 + b6*x6) / (1 + exp(b20 + b1*x1 + b2*x2 + b3*x3 + b4*x4 + b5*x5 + b6*x6))"
+calc.healthy <- deltaMethod.polr2(object = mod.fit.ord, g = g.healthy)
+
+calc.healthy$Estimate
+calc.healthy$SE
+alpha <- 0.05
+calc.healthy$Estimate
+```
+
+#### Odd ratios for ordinal
+
+Consider model of:
+
+$$
+\large logit[P(Y \le j)] = \beta_{j0} + \beta_1x
+$$
+
+Odds ratio is:
+
+$$
+\large \frac {Odds_{x+c} (Y \le j)}{Odds_x(Y \le j)} = \frac {e^{\beta_{j0} + \beta_1(x+c)}}{e^{\beta_{j0} + \beta_1x}} = e^{c\beta_1}
+$$
+
+Where we say that the odds of Y less than equal to j vs. Y greater than j change by e\^c\\beta 1 times for a c-unit increase in x1 while holding the other explanatory variables in the model constant.
+
+```{r}
+round(c.value, 2) #class = 1 is first value
+
+round(exp(c.value* (-mod.fit.ord$coefficients)), 2)
+
+round(1/exp(c.value*(-mod.fit.ord$coefficients)), 2)
+```
+
+```{r}
+class(mod.fit.ord)
+methods(class = polr)
+```
+
+```{r}
+conf.beta <- confint(object = mod.fit.ord, level = 0.95)
+ci<- exp(c.value*(-conf.beta))
+round(data.frame(low = ci[,2], up = ci[,1]), 2)
+
+```
+
+#### Contingency tables (this code is funky and not right)
+
+```{r}
+library(package = MASS)
+levels(diet$bloat)
+summary(mod.fit.ord)
+```
+
+```{r}
+library(package = car)
+Anova(mod.fit.ord)
+```
+
+```{r}
+round(exp(-coefficients(mod.fit.ord)), 2)
+conf.beta <- confint(object = mod.fit.ord, level = 0.95)
+
+ci <- exp(-conf.beta)
+round(data.frame(low = ci[,2], up = ci[,1]), 2)
+
+round(data.frame(low = 1/ci[,1], up = 1/ci[,2]), 2)
+```
+
+```{r}
+
+```
