@@ -1,0 +1,448 @@
+## Analyzing a Count Response
+
+Imagine you're looking at cars crossing the Bay Bridge every Wednesday at 2:00 - 3:00 P.M. Population intensity (intensity as in how frequent cars zoom across the bridge) should be the same. BUT things change. People get sick. People carpool. The number will not always be the same. THUS we present the Poisson Distribution for counts.
+
+Here's what we assume in this case:
+
+1.  All counts taken on some process have the same underlying intensity
+2.  The period of observation is constant for each count
+
+#### Poisson PMF
+
+PMF of Y when Y is a Poisson random variable:
+
+$$
+\large P(Y = y) = \frac{e^{-u}\mu^y}{y!}, y = 0,1,2,...,
+$$
+
+Also abbreviated as:
+
+$$
+\large Y \sim P_O(\mu)
+$$
+
+where:
+
+$$
+\large E(Y) = Var(Y) = \mu
+$$
+
+$\large \mu$ is our only parameter and its also the mean and variance. Weird right?
+
+The sums of Poisson random variables are also Poisson random variables:
+
+If $\large Y_1, Y_2, …, Y_m$ are independent with $\large Y_k \sim P_O(\mu_k)$ for $\large k = 1,…,m$, then
+
+$$
+\large \sum^m_{k=1}Y_k \sim P_O(\sum^m_{k=1} =\mu_k)
+$$ Thus, total of several counts can be modeled with Poisson distributions.
+
+Example with car intersection data:
+
+```{r}
+stoplight <- read.csv(file = "./Stoplight.csv")
+head(stoplight)
+```
+
+```{r}
+mean(stoplight$vehicles)
+var(stoplight$vehicles)
+```
+
+```{r}
+# Frequencies
+table(stoplight$vehicles) #Note that y = 0, 1, ..., 8 all have positive counts
+rel.freq <- table(stoplight$vehicles)/length(stoplight$vehicles)
+rel.freq2 <- c(rel.freq, rep(0, times = 7)) #do this cuz our y is 15, we wanna look all the way up to the 15th count.
+
+# Poisson calculations
+y <- 0:15 
+prob <- round(dpois(x = y, lambda = mean(stoplight$vehicles)), 4)
+
+# Observed and Poisson
+data.frame(y, prob, rel.freq = rel.freq2)
+
+plot(x = y - 0.1, y = prob, type = "h", ylab = "Probability", xlab = "Number of vehicles", lwd = 2,
+     xaxt = "n")
+axis(side = 1, at = 0:15)
+lines(x = y + 0.1, y = rel.freq2, type = "h", lwd = 2, lty = "solid", col = "red")
+abline(h = 0)
+legend(x = 9, y = 0.15, legend = c("Poisson", "Observed"), lty = c("solid", "solid"), lwd = c(2,2), col = c("black", "red"), bty = "n")
+# dev.off()  # Create plot for book
+
+```
+
+#### Poison Likelihood
+
+$$
+\large L(\mu;y_1,...,y_n) =  \Pi^n_{i = 1}\frac{e^{-\mu} \mu^{y_i}}{y_i!}
+$$
+
+MLE for $\large \mu$ is:
+
+$$
+\large \hat{\mu} = \bar{y}
+$$
+
+Variance for $\large \hat{u}$ is:
+
+$$
+\large \widehat {Var}(\hat{\mu}) = \hat{u}/n
+$$
+
+The variance differs from our variance formula for binomial because the mean and variances are the same in the Poisson distribution.
+
+#### Confidence Intervals for $\large \mu$
+
+Wald confidence interval:
+
+$$
+\large \hat{\mu} \pm Z_{1-\alpha/2}\sqrt{\hat{\mu}/n}
+$$
+
+Score statistic for score interval:
+
+$$
+\large Z_0 = \frac{\hat{\mu} - \mu_0}{\sqrt{\mu_0/n}}
+$$
+
+Score interval:
+
+$$
+\large
+\left(\hat{\mu} + \frac{Z^2_{1-a/2}}{2n}\right) \pm
+Z_{1-\alpha/2}\sqrt{\frac{\hat{\mu} + Z^2_{1-\alpha/2}/4n}{n}}
+$$
+
+LR interval is the set of values for $\large \mu_0$ for which:
+
+$$
+\large -2log[L(\mu_0|y_1…,y_n)/L(\hat{\mu}|y_1…,y_n)] \le \chi^2_{1,1-\alpha}
+$$
+
+There is no closed formed solution to this so it's solution is found using iterative numerical procedures. Generally not used for simple problems.
+
+LR interval:
+
+$$
+\large \chi^2_{2n\hat{u},a/2}/2n < \mu<\chi^2_{2(n\hat{\mu}+1),1-\alpha/2}/2n
+$$
+
+Main advantage of Poisson-based methods is \$\\large Var(\\bar{Y} = \\mu/n)\$, which allows for shorter confidence intervals and more powerful tests to be computed, especially in shorter samples. The disadvantages of Poisson-based models is that they don't count for variability when the count intensity isn't rigidly constant. Thus, $\large \widehat{Var}(\hat{\mu}) =\hat{\mu}/n$ often underestimates the true variability of the mean count. We use ordinary t-distribution tests and confidence intervals for the population mean when the count data is drawn from a single population.
+
+Example of finding confidence intervals for the mean number of cars stopped at the intersection:
+
+```{r}
+alpha <- 0.05
+n <- length(stoplight$vehicles)
+mu.hat <- mean(stoplight$vehicles)
+
+#Wald
+mu.hat + qnorm(p = c(alpha/2, 1-alpha/2))*sqrt(mu.hat/n)
+
+#Score - best one..?
+(mu.hat + qnorm(p = c(alpha/2, 1-alpha/2)) / (2*n)) + qnorm(p = c(alpha/2, 1-alpha/2)) * sqrt((mu.hat + qnorm(p = 1-alpha/2)/(4*n))/n)
+
+#Exact
+qchisq(p = c(alpha/2, 1-alpha/2), df = c(2*n*mu.hat, 2*(n*mu.hat+1)))/(2*n)
+
+#Usual t-distribution based interval
+t.test(x = stoplight$vehicles, conf.level = 0.95)
+```
+
+## Poisson Regression Models for Count Responses
+
+There are two things we can model for: probabilities and/or means.
+
+#### Model for mean: Log link
+
+We have n observations of a response random variable Y, and p \>= 1 fixed explanatory variables, $\large x_1,…,x_p$. We assume that for observation $\large i = 1,…,n$:
+
+$$
+Y_i \sim P_O(\mu_i)
+$$
+
+where
+
+$$
+\large \mu_i = exp(\beta_0 + \beta_1x_{i1} + ... + \beta_px_{ip})
+$$
+
+Thus, the log link is:
+
+$$
+\large log(\mu) = \beta_0 + \beta_1x_1 + ... + \beta_px_p
+$$
+
+With Poisson, we can also do ratio of the means at differing x's:
+
+Example model:
+
+$$
+\large \mu(x) = exp(\beta_0 + \beta_1x)
+$$
+
+Ratio of the means when we increase x by c:
+
+$$
+\large \frac{\mu(x+c)}{\mu(x)} = \frac {exp(\beta_0 + \beta_1(x+c))}{exp(\beta_0 + \beta_1x)} = exp(c\beta_1)
+$$
+
+We then say that the percentage change in the mean response that results from a c-unit change in x is $\large PC = 100(e^{c\beta_1}-1)\%$.
+
+#### Parameter estimation
+
+Poisson regression model assumes that observations $\large y_1, y_2,…,y_n$ are independent. Hence the likelihood is formed by the product of individual PMFs.
+
+$$
+\large
+\begin{align}
+log[L(\beta_0,...,\beta_p|y_1,...y_n)] &= \sum^n_{i=1}[-exp(\beta_0 + \beta_1x_{i1} + ...+ \beta_px_{ip}) \\
+&+y_i(\beta_0 + \beta_1x_{i1} + ... +\beta_px_{ip}) - log(y_i!)]
+\end{align}
+$$
+
+The parameters are found iteratively by taking the derivative of each $\large \beta_j$ and setting them all equal to 0. Then, you get your estimates: $\large \hat{\beta}_0, \hat{\beta}_1,…,\hat{\beta}_p$.
+
+Then you can use these estimated parameters for predictions and the estimated change in mean for a c-unit change in x_j, which is $\large \widehat{PC} = e^{c\hat{\beta}_j}$, holding all other variables constant.
+
+#### Inference of parameters
+
+The book just says either use Wald or likelihood ratio lol.
+
+Example for modeling count of alcoholic drinks for sad people on Saturdays:
+
+```{r}
+dehart <- read.table(file = './DeHartSimplified.csv', header = TRUE, sep = ',', na.strings = " ")
+head(dehart)
+```
+
+```{r}
+#Reduce the data to what is needed for examples
+saturday <- dehart[dehart$dayweek == 6, c(1,4,7,8)]
+head(round(x = saturday, digits = 3))
+```
+
+```{r}
+dim(saturday) #i guess only 89 out of the 100 people got data for sat
+```
+
+```{r}
+mod.neg <- glm(formula = numall ~ negevent, family = poisson(link = "log"),
+               data = saturday)
+summary(mod.neg)
+```
+
+```{r}
+100*(exp(mod.neg$coefficients[2]) - 1) # A 1-unit increase in negative events leads to \widehat PC = -23.0%
+```
+
+```{r}
+beta1.int <- confint(mod.neg, parm = "negevent", level = 0.95)
+100*(exp(beta1.int) - 1)
+```
+
+```{r}
+library(car)
+Anova(mod.neg)
+```
+
+```{r}
+#Matching confidence level with p-value of LRT to demonstrate equivalence
+#basically for the parameter \beta 1, which is -0.2 in this case
+confint(mod.neg, parm = 'negevent', level = 1-0.04688)
+```
+
+Strange how a more negative event makes one drink less right? Maybe its cuz we're looking at only one particular Saturday. Need to look at all other Saturdays. Also maybe the study is making them feel self conscious and not wanting to drink.
+
+Saturated model:
+
+```{r}
+mod.negpos <- glm(formula = numall ~ negevent*posevent, family = poisson(link = "log"), data = saturday) #remember, x1*x2 is the same thing as interaction
+summary(mod.negpos)
+```
+
+```{r}
+confint(mod.negpos)
+Anova(mod.negpos)
+```
+
+Plots from the book surprising results. If these people had a good day, they were drank more if their day was also bad. If they had a not so good day, they drank less when their day also went bad when compared to the former.
+
+Calculating the ratio of means corresponding to a 1-unit increase in negative events at a fixed value of positive events, say a:
+
+$$
+\large \frac {\mu(negevent + 1, a)}{\mu(negevent, a)} = exp(\beta_1 + a\beta_3)
+$$
+
+Computation and the corresponding percent changes $\large 100(exp(\beta_1 + a\beta_3) - 1)$, and their confidence intervals:
+
+```{r}
+posev.quart <- summary(saturday$posevent)
+posev.quart # to test at the 1, 2, and 3rd quartile
+
+mean.ratio <- exp(mod.negpos$coefficients[2] + posev.quart[c(2,3,5)]*
+                    mod.negpos$coefficients[4])
+mean.ratio
+
+100*(mean.ratio - 1) #percent changes as negevent increases by 1 at 3 different fixed posevents (1st quartile, median, and 3rd quartile)
+```
+
+```{r}
+install.packages("mcprofile")
+library(mcprofile)
+K <- matrix(data = c(0, 1, 0, 1*posev.quart[2],
+                     0, 1, 0, 1*posev.quart[3],
+                     0, 1, 0, 1*posev.quart[5]),
+            nrow = 3, ncol = 4, byrow = TRUE)
+
+linear.combo <- mcprofile(object = mod.negpos, CM = K)
+ci.beta <- confint(object = linear.combo, level = 0.95)
+100*(exp(ci.beta$estimate) - 1) #Verifies got same answer as previous code chunk
+```
+
+```{r}
+100*(exp(ci.beta$confint) - 1)
+```
+
+### Category Explanatory Variables
+
+Same thing as in the regression models with binary or multicategory responses. For example, a categorical explanatory variable X with I levels is converted into I - 1 indicator levels. Suppose that X has 4 levels. Then the model for the mean is:
+
+$$
+\large log(\mu) = \beta_0 + \beta_2x_2 + \beta_3x_3 + \beta_4x_4
+$$
+
+Read page bottom paragraph of 211 to understand the effect parameter properties. But basically you can subtract $\large \beta_2 = log(\mu_2) - log(\mu_1)$.
+
+To make an inference, you typically estimate the means for each level of X and compare those means in some way. Means are estimated as $\large \hat{\mu}i = e^{\hat{\beta}0 + \hat{\beta}i}, i = 1,…,q$. *Confidence intervals for individual means are found by exponentiating confidence intervals for corresponding sums of regression parameters,* $\large \beta_0 + \beta_i$.
+
+Theres a lot more to this. Read page 212.
+
+Example of comparing bird count over different types of habitat:
+
+```{r}
+alldata <- read.table(file = "./BirdCounts.csv", sep = ',', header = TRUE)
+head(alldata)
+contrasts(factor(alldata$Loc))
+```
+
+#### Model using regular likelihood
+
+```{r}
+M1 <- glm(formula = Birds ~ Loc, family = poisson(link = 'log'), data = alldata)
+summary(M1)
+```
+
+Because $\large \hat{\beta}_0$ = 3.88, the estimated mean count for the edge habitat is $\large \hat{\mu}_1 = e^{3.88} = 48.3$. The remaining parameter estimates measure the estimated difference in log-means between the location and edge. For example, $\large \hat{\beta}_4$ = 0.12. Thus, the ratio of the two means is $\large \hat{\mu}_4/\hat{\mu}_1 = e^{0.11874} = 1.126$.
+
+To test whether all means are equal:
+
+```{r}
+anova(M1, test = "Chisq")
+```
+
+Wald Summary:
+
+```{r}
+# Get predicted means and CIs
+pred.data <- data.frame(Loc = c("ForA", "ForB", "Frag", "Edge", "PasA", "PasB"))
+means <- predict(object = M1, newdata = pred.data, type = "link", se.fit = TRUE)
+alpha <- 0.05
+
+# Wald CI for log means
+lower.logmean <- means$fit + qnorm(alpha/2)*means$se.fit
+upper.logmean <- means$fit + qnorm(1 - alpha/2)*means$se.fit
+
+# Combine means and confidence intervals in count scale
+mean.wald.ci <- data.frame(pred.data, round(cbind(exp(means$fit), exp(lower.logmean), exp(upper.logmean)), digits = 2))
+colnames(mean.wald.ci) <- c("Location", "Mean", "Lower", "Upper")
+mean.wald.ci
+```
+
+```{r}
+ #Redefining location group factor so that plot does not alphabetize
+  mean.wald.ci$Loc2 <- factor(mean.wald.ci$Location, levels = c("ForA", "ForB", "Frag", "Edge", "PasA", "PasB"))
+  mean.wald.ci
+stripchart(Lower ~ Loc2, data = mean.wald.ci, vertical = FALSE, xlim = c(20,150), col = "red", pch = "(", main = "", xlab = "Bird Count", ylab = "Location")
+  stripchart(Upper ~ Loc2, data = mean.wald.ci, vertical = FALSE, col = "red", pch = ")", add = TRUE)
+  stripchart(Mean ~ Loc2, data = mean.wald.ci, vertical = FALSE, col = "red", pch = "+", add = TRUE)
+  grid(nx = NA, ny = NULL, col = "gray", lty = "dotted")
+  abline(v = mean(alldata$Birds), col = "darkblue", lwd = 4)
+```
+
+The LR way:
+
+```{r}
+pred.data <- data.frame(Loc = c("ForA", "ForB", "Frag", "Edge", "PasA", "PasB"))
+
+K <- matrix(data = c(1, 1, 0, 0, 0, 0,
+                     1, 0, 1, 0, 0, 0,
+                     1, 0, 0, 1, 0, 0,
+                     1, 0, 0, 0, 0, 0,
+                     1, 0, 0, 0, 1, 0,
+                     1, 0, 0, 0, 0, 1), nrow = 6, ncol = 6, byrow = TRUE)
+linear.combo <- mcprofile(object = M1, CM = K)
+ci.log.mu <- confint(object = linear.combo, level = 0.95, adjust = "none")
+
+mean.LR.ci1 <- data.frame(Loc = pred.data, Estimate = exp(ci.log.mu$estimate), Lower = exp(ci.log.mu$confint[,1]), Upper = exp(ci.log.mu$confint[,2]))
+
+mean.LR.ci1
+```
+
+Comparing means of same type to different type:
+
+We want to compare forests to anything else. But since everything comes in pairs... here's what we do. Estimate means separately for forest A and forest B, and then combine the means to make comparisons against the fragment mean.
+
+To do this, you have to take the geometric mean of the two forest means against the fragment mean.
+
+$$
+\large (\mu_2\mu_3)^{1/2}/\mu_4
+$$
+
+Where 2, 3 is forest a and b and 4 is fragment.
+
+Thus, the log in terms of regression parameters is:
+
+$$
+\large (\beta_2 + \beta_3)/2-\beta_4
+$$
+
+Thats why beta2 and beta 3 are .5 and 4 is -1 for the 2nd row
+
+LR way:
+
+```{r}
+# Confidence intervals for linear combinations of parameters
+
+  #Create coefficients for Lin Combos
+  contr.mat <- rbind(c(0,.5,.5,0,0,0), c(0,.5,.5,-1,0,0), c(0,.5,.5,0,-.5,-.5), 
+                     c(0,0,0,1,0,0), c(0,0,0,1,-.5,-.5), c(0,0,0,0,-.5,-.5))
+  rownames(contr.mat) <- c("For-Edge", "For-Frag", "For-Past", "Frag-Edge", "Frag-Past", "Edge-Past")
+  contr.mat
+
+  linear.combo <- mcprofile(object = M1, CM = contr.mat)
+  summary(linear.combo)  
+  exp(confint(linear.combo)$confint)
+  summary(linear.combo, adjust = "none")
+  exp(confint(linear.combo, adjust = "none")$confint)
+```
+
+Wald way:
+
+```{r}
+# Wald inferences using multcomp package
+  library(multcomp)
+  loc.test <- glht(model = M1, linfct = contr.mat)
+
+  # Defaults use multiplicity adjustment for simultaneous confidence level
+  summary(loc.test)
+  exp(confint(loc.test)$confint)
+  # Options to get unadjusted (univariate) tests and CIs
+  summary(loc.test, test = univariate())
+  exp(confint(loc.test, calpha = qnorm(0.975))$confint)
+```
+
+## 5.2 Tools to assess model fit
+
+## 
