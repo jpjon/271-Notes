@@ -1,0 +1,239 @@
+```{r}
+library(astsa)
+theme_set(theme_minimal())
+```
+
+# Time Series Regression and EDA
+
+### Classical Regression for Time Series
+
+Output: $\large x_t$ for $\large t = 1,…,n$
+
+Input (independent series): $\large z_{t1}, z_{t2},…,z_{tq}$ where the inputs are fixed and none
+
+This is expressed as:
+
+$$
+\large x_t = \beta_0 + \beta_1z_{t1} + \beta_2z_{t2} + ...+ \beta_qz_{tq} + w_t
+$$
+
+where the betas are unknown fixed regression coefficients and w_t is a random error or noise consisting of IID normal variables with mean zero and variance $\large \sigma^2_w$ .
+
+Consider this graph:
+
+```{r}
+plot(gtemp, type = "o", ylab = "Global Temperature Deviations")
+```
+
+We might use SLR to estimate the upward trend by fitting the model
+
+$$
+\large x_t = \beta_0 + \beta_1z_t + w_t \;\;, z_t = 1880, 1857,..., 2009.
+$$
+
+This is in the form of the regression model with q = 1.
+
+OLS -\> minimize the error sum of squares:
+
+$$
+\large Q = \Sigma^n_{t=1}w^2_t = \Sigma^n_{t=1}(x_t - [\beta_0 + \beta_1z_t])^2
+$$
+
+with respect to B_i for i = 0, 1. You take the partial derivative $\large \partial Q / \partial B_i = 0$ for i = 0, 1. The OLS estimates fo the coefficients are explicit and given by:
+
+$$
+\large \hat{\beta}_1 = \frac{\Sigma^n_{t=1} (x_t - \bar{x})(z_t - \bar{z}_t)}{\Sigma^n_{t=1}(z_t - \bar{z})^2} and\  \hat{\beta}_0 = \bar{x}- \hat{\beta}_1\bar{z}
+$$
+
+```{r}
+summary(fit <- lm(gtemp~time(gtemp))) #regress gtemp on time
+plot(gtemp, type = 'o', ylab = 'Global Temperature Deviation')
+abline(fit)
+```
+
+The multiple regression model can also be described more conveniently with a vectors of z_t' and beta'. The ' means transposed.
+
+$$
+\large x_t = \beta_0 + \beta_1z_{t1} + ...+ \beta_qz_{tq} + w_t = \beta'z_t + w_t
+$$
+
+Thus, the OLS estimation to minimize the error sum of squares can be written as:
+
+$$
+\large Q = \Sigma^n_{t=1}w^2_t = \Sigma^n_{t=1}(x_t - \beta'z_t)^2
+$$
+
+Then you take the partial derivative of each beta, giving us the normal equations through vector notation:
+
+$$
+\large (\Sigma^n_{t=1}z_tz'_t)\hat{\beta} = \Sigma^n_{t=1}z_tx_t
+$$
+
+If $\large \Sigma^n_{t=1}z_tz'_t$ is non-singular, the least squares estimate of beta is
+
+$$
+\large \hat{\beta} = (\Sigma^n_{t=1}z_tz'_t)^{-1}\Sigma^n_{t=1}z_tx_t
+$$
+
+The minimized error sum of squares (SSE) is:
+
+$$
+\large SSE = \Sigma^n_{t=1}(x_t - \hat{x}_t)^2 = \Sigma^n_{t=1}(x_t-\hat{\beta}'z_t)^2
+$$
+
+If the errors w_t are normally distributed, beta hat is normally distributed with:
+
+$$
+\large cov(\hat{B}) = \sigma^2_wC
+$$
+
+where
+
+$$
+\large C = \left(\Sigma^n_{t=1}z_tz'_t\right)^{-1}
+$$
+
+An unbiased estimator for the variance $\large \sigma^2_w$ is:
+
+$$
+\large s^2_w = MSE = \frac{SSE}{n-(q+1)}
+$$
+
+Under the normal assumption:
+
+$$
+\large t = \frac{(\hat{\beta}_i - \beta_i)}{s_w\sqrt{c_{ii}}}
+$$
+
+has the t-distribution with n - (q + 1) degrees of freedom. c_ii denotes the i-th diagonal element of C. This is often used for individual tests of the null hypothesis $\large H_0:\beta_i = 0$ for i = 1,...q.
+
+Say you have a reduced model:
+
+$$
+\large x_t = \beta_0 + \beta_1z_{t1} + ... + \beta_rz_{tr} +w_t
+$$
+
+You test the reduced model by the full model by using the F-statistic:
+
+$$
+\large F = \frac{(SSE_r-SSE)/(q-r)}{SSE/(n - q- 1)} = \frac{MSR}{MSE}
+$$
+
+A special is case when you think all the inputs are unnecessary $\large H_0: \beta_1 = .. . = \beta_q = 0$. In this case r = 0 and the model becomes:
+
+$$
+\large x_t = \beta_0 + w_t
+$$
+
+Then you measure the proportion of variation accounting for all the variables instead:
+
+$$
+\large R^2 = \frac{SSE_0 - SSE}{SSE_0}
+$$
+
+where the residual sum of squares under the reduced model is:
+
+$$
+\large SSE_0 = \Sigma^n_{t=1}(x_t-\bar{x})^2
+$$
+
+We choose models based on the maximum likelihood estimator for variance, where k is t he number of coefficients:
+
+$$
+\large \hat{\sigma}^2_k = \frac{SSE(k)}{n}
+$$
+
+We can then use Akaike's Information Criterion (AIC):
+
+$$
+\large AIC = log\hat{\sigma}^2_k + \frac{n+2k}{n}
+$$
+
+Good for small samples AICc:
+
+$$
+\large AICc = log\hat{\sigma}^2_k + \frac{n+k}{n-k-2}
+$$
+
+Good for large samples Bayesian Information Criterion (BIC):
+
+$$
+\large BIC = log\hat{\sigma}^2_k + \frac{klogn}{n}
+$$
+
+Example:
+
+```{r}
+par(mfrow = c(3,1))
+plot(cmort, main= "Cardiovascular Mortality", xlab = "", ylab = "")
+plot(tempr, main = "Temperature", xlab = "", ylab = "")
+plot(part, main = "Particulates", xlab = "", ylab = "")
+dev.new() #new graphic device for scatterplot matrix
+pairs(cbind(Mortality = cmort, Temperature = tempr, Particulates = part))
+
+temp = tempr - mean(tempr) #center temperature
+temp2 = temp^2
+trend = time(cmort) #time
+fit = lm(cmort ~ trend + temp + temp2 + part, na.action = NULL) #Null to retain ts attributes
+summary(fit)
+summary(aov(fit)) #Anova table
+summary(aov(lm(cmort ~ cbind(trend, temp, temp2, part))))
+num = length(cmort)
+AIC(fit)/num - log(2*pi)
+BIC(fit)/num - log(2*pi)
+```
+
+### Exploratory Data Analysis
+
+Need stationary models to do all kinds of things, such as estimating autocorrelations.
+
+Easiest form of non stationary to work with is the trend stationary model, where the process has stationary behavior around a trend.
+
+$$
+\large x_t = \mu_t + y_t
+$$
+
+where x_t are observations, u_t denotes the trend, and y_t is a stationary process. You can try taking out the trend to get a better sense of the time series. You do so by obtaining an estiamte of the trend component $\large \hat{\mu}_t$ and then work with the residuals.
+
+$$
+\large \hat{y}_t = x_t - \hat{\mu}_t
+$$
+
+Example:
+
+We have the model of this form from the temperature data above:
+
+$$
+\large x_t = \mu_t + y_t
+$$
+
+where a straight line may be reasonable for the trend:
+
+$$
+\large \mu_t = \beta_1 + \beta_2 t
+$$
+
+Using OLS we found:
+
+$$
+\large \hat{\mu}_t = -11.2 + .006t
+$$
+
+To obtain the detrended series, we simply subtract $\large \hat{\mu}_t$ from the observations x_t to obtain the detrended series:
+
+$$
+\large \hat{y}_t = x_t + 11.2 - .006 t
+$$
+
+R code:
+
+```{r}
+fit = lm(gtemp ~time(gtemp), na.action = NULL) #regress gtemp on time
+par(mfrow = c(2,1))
+plot(resid(fit), main = "detrended") #I guess resid is to get detrend?
+plot(diff(gtemp), main = "first difference")
+par(mfrow = c(3,1))#plot ACFs
+acf(gtemp, 48, main = "gtemp")
+acf(resid(fit), 48, main = "detrended")
+acf(diff(gtemp), 48, main = "first difference")
+```

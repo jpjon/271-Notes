@@ -1,0 +1,588 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r, echo = F}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+```{r}
+library(car) #for Anova function
+```
+
+# Logistic Regression
+
+##### Review of Normal Linear Regression
+
+$$
+\large Y_i = \beta_0 + \beta_1x_{i1} + ... + \beta_px_{ip} + \epsilon_i
+$$
+
+$$
+where \: \epsilon_i \: for \: i = 1,...n \: are \: independent \:
+$$
+
+$\beta_0,….,\beta_p$ are regression parameters
+
+since $E(\epsilon_i) = 0$ :
+
+$$
+\large E(Y_i) = \beta_0 + \beta_1x_{i1} + ... + \beta_px_{ip}
+$$
+
+MLE:
+
+$$
+\large L(\pi_1,...,\pi_n|y_1,...,y_n) = P(Y_1 = y_1) \times ... \times P(Y_n = y_n)
+$$
+
+$$
+\large =\prod_{i=1}^nP(Y_i = y_i)
+$$
+
+$$
+\large = \prod_{i = 1}^n \pi_i^{y_i} (1-\pi_i)^(1-y_i)
+$$
+
+But this would only give us $\hat{\pi}_i = 0 \: or\: 1$ so it's pretty much useless
+
+Instead we use the logistic regression model:
+
+## Logistic Regression Formula
+
+$$
+\large \pi_i = \frac{exp(\beta_0 + \beta_1x_{i1} + ... + \beta_px_{ip}}{1 + exp(\beta_0 + B_1x_{i1}+...+ \beta_px_{ip}}
+$$
+
+Or, after some algebra... we call this the ${logit \: transformation}$:
+
+$$
+\large log(\frac{\pi_i}{1-\pi_i}) = \beta_0 + \beta_1x_{i1} + ... + \beta_px_{ip}
+$$
+
+Notice that the LHS is the natural logarithm of the odds of success.
+
+Need to use iteratively reweighted least squares (IRLS) to find the parameter estimates. Basically, the weights are shifted over and over until the likelihood converges to its maximum value. To do so, we use R's glm() function and optim() function. Implementation shown later.
+
+## Plot of logistic regression model
+
+```{r}
+
+par(mfrow = c(1,2), mar=c(5,4,4,1)) #prepare plot with 1 row 2 columns "makeframebyrow", mar parameter is to set margins of bottom, left, top, right. Needed to use it cuz it was cutting off my title and graphs
+beta0 <- 1
+beta1 <- 0.5
+
+curve(expr = exp(beta0+beta1*x) / (1+exp(beta0+beta1*x)), xlim = c(-15, 15), col = 'black', main = expression(pi == frac(e^{1+0.5*x[1]}, 1+e^{1+0.5*x[1]})), xlab = expression(x[1]), ylab = expression(pi))
+
+beta1 <- -0.5
+curve(expr = exp(beta0+beta1*x) / (1+exp(beta0+beta1*x)), xlim = c(-15, 15), col = 'black', main = expression(pi == frac(e^{1+0.5*x[1]}, 1+e^{1+0.5*x[1]})), xlab = expression(x[1]), ylab = expression(pi))
+
+```
+
+## Example of Logistic Regression
+
+Data consisting of a bunch of independent field kicks in football. The "good" variable is our target variable that we want to estimate. 1 = successful field kick, 0 = failed field kick.
+
+```{r}
+placekick <- read.table( file = "./Placekick.csv" , header = TRUE , sep = ",")
+head(placekick)
+```
+
+We're only going to focus on using one variable for now, "distance", which is how far the kicker was from the field goal.
+
+Thus:$$
+logit(\pi) = \beta_0 + \beta_1x_1
+$$
+
+where x1 = distance
+
+```{r}
+mod.fit <- glm(formula = good~distance, family = binomial(link = logit), data = placekick) #glm = generalized linear model
+mod.fit$coefficients
+```
+
+```{r}
+#more detailed summary of mod.fit
+summary(mod.fit)
+# The last line of this outputing # of fisher scoring iterations tells us how many iterations it took for the logit function to reach convergence. In this case, it took 6 iterations
+```
+
+## Example of Logistic Regression W/ 2 Explanatory Variables
+
+#### Using glm()
+
+```{r}
+mod.fit2 <- glm(formula = good ~ change + distance, family = binomial(link = logit), data = placekick)
+mod.fit2$coefficients
+```
+
+In equation form, mod.fit2 is:
+
+$$
+\large logit(\hat{\pi}) = 5.8932 - 0.4478change - 0.1129 distance
+$$
+
+```{r}
+vcov(mod.fit2) #covariance matrix. different from the hessian matrix
+#to get this covariance matrix, you first get the hessian matrix, log it and take the inverse and multiply by -1
+```
+
+Example of obtaining the estimated covariance matrix for the regression parameter estimates:
+
+```{r}
+round(summary(mod.fit)$coefficients,4)
+```
+
+```{r}
+vcov(mod.fit) #covariance matrix
+
+vcov(mod.fit)[2,2] #var-hat(beta-hat_1)
+summary(mod.fit)$coefficients[2,2]^2 #same as the line above because we're squaring the std.error, which is variance
+```
+
+Actual matrix calculation of covariance matrix using $(X'VX)^-1$
+
+```{r}
+pi.hat <- mod.fit$fitted.values
+V <- diag(pi.hat * (1-pi.hat)) #getting only diagonal of hte matrix
+X <- cbind(1, placekick$distance)
+solve(t(X) %*% V %*% X)# t() is to find transpose %*% for matrix multiplication, solve for inverse
+#this returns the same thing as the vcov function
+```
+
+#### Using likelihood function
+
+We can use both glm() and log-likelihood function to fit our model. Log-likelihood is a more general approach that will be useful later. Here's an example of how to use the log-likelihood function instead of the glm() to estimate a logistic regression model:
+
+```{r}
+#setting up the function
+logL <- function(beta, x, Y) { 
+  pi <- exp(beta[1] + beta[2]*x) / (1 + exp(beta[1] + beta[2]*x)) #pi for logistic regression
+  sum(Y*log(pi) + (1-Y)*log(1-pi))
+}
+
+logL(beta = mod.fit$coefficients, x = placekick$distance, Y = placekick$good)
+logLik(mod.fit) #Automatic extraction of MLE, good to see that it matches up with our prior glm() function that produced our original mod.fit
+```
+
+Now to optimize our estimates with optim():
+
+```{r}
+#Find the starting values for parameter estimates
+reg.mod <- lm(formula = good ~ distance, data = placekick)
+reg.mod$coefficients
+
+mod.fit.optim <- optim(par = reg.mod$coefficients, fn = logL, hessian = TRUE, x = placekick$distance, Y = placekick$good, control = list(fnscale = -1), method = "BFGS")
+#since we want to maximize logL, we have control = list(fnscale = -1) which tells the function to minimize the negative of logL. optim() default is to minimize a function so we need to do this
+
+names(mod.fit.optim)
+mod.fit.optim$par
+mod.fit.optim$value #maximum value of the function
+mod.fit.optim$convergence #0 means convergence was achieved
+
+-solve(mod.fit.optim$hessian) #covariance matrix
+```
+
+## Alternative: Logistic Regression w/ Multiple Trials
+
+Let's say we have $J$ trials each with their own different weights for their explanatory variables. Then the log-likelihood function is:
+
+$$
+\large log[L(\beta_0,...,\beta_p|w_1,...,w_j)] = \Sigma_{j=1}^Jlog[({n_j\choose x_j})] + w_jlog(\pi_j) + (n_j-w_j)log(1-\pi_j)
+$$
+
+Because $\large {n_j\choose x_j}$ is a constant, the estimated parameter values do not change. So the MLEs are the same for every binary response
+
+Example:
+
+```{r}
+w <- aggregate(x = good ~ distance, data = placekick, FUN = sum)
+
+n <- aggregate(x = good ~ distance, data = placekick, FUN = length)
+
+w.n <- data.frame(distance = w$distance, success = w$good, trials = n$good, proportion = round(w$good/n$good, 4))
+head(w.n) #now a binomial variable
+```
+
+```{r}
+mod.fit.bin <- glm(formula = success/trials ~ distance, weights = trials, family = binomial(link = logit), data = w.n)
+summary(mod.fit.bin)
+```
+
+# Hypothesis Tests for Regression Parameters
+
+We test if $H_0 \::\:\beta_r = 0$ vs. $H_1 \::\:\beta_r \neq 0$. If the hypothesis is not rejected, the $r^{th}$ explanatory variable is not included in the logit model.
+
+We test by either Wald's test or the likelihood ratio test. LRT usually performs better because of what we learned about true vs stated tests.
+
+**Wald test**:
+
+$$
+Z_0 = \frac{\hat{\beta_r}}{\sqrt{\hat{Var}(\hat{\beta_r}})}
+$$
+
+**LRT:**$$
+\Lambda = 
+\frac{MLE \; under \; H_0}{MLE\; under\; H_0 \; or \; H_A}
+$$
+
+We prefer to convert it to -2log(Delta)... so:
+
+$$
+\large -2log(\Lambda) = -2\Sigma_{i =1 }^n y_ilog\left(\frac{\hat{\pi}_i^{(0)}}{\hat{\pi}_i^{(a)}}\right) + (1-y_i)log\left(\frac{1-\hat{\pi}_i^{(0)}}{1-\hat{\pi}_i^{(a)}}\right)
+$$
+
+Source: Trust me bro. It's easy to do in R with anova() and Anova(). Here's how:
+
+Imagine we're using a model $\large logit(\pi) = \beta_0 +\beta_1change+\beta_2distance$
+
+It's results are saved above in mod.fit2
+
+**Wald R Code**
+
+```{r}
+summary(mod.fit2)
+# Includes Wald's test. Z_0 = -0.447/0/1936 = -2.32124 (the Z value column)
+# Since prob is less than 0.05, we don't reject it
+
+# Thus, we say there is marginal evidence that change is important to include in the model GIVEN that distance is in the model. You have to be sure to state all the other GIVEN variables in the model if you say this statement.
+
+#Similary, we say that there is strong evidence the importance of distance given that change is in the model
+```
+
+**LRT Code**
+
+```{r}
+Anova(mod.fit2, test = "LR")
+# Kinda the same thing as Wald except you're now using a Chisq distribution
+```
+
+similar way for LRT. Only difference is that it's sequential:
+
+```{r}
+anova(mod.fit2, test = 'Chisq')
+```
+
+little anova() will be useful later when you compare specific models. Example:
+
+```{r}
+mod.fit.Ho <- glm(formula = good ~ distance, family = binomial(link = logit), data = placekick)
+anova(mod.fit.Ho, mod.fit2, test = 'Chisq')
+```
+
+Again, LRT is great when functions like anova and Anova arent available. Generally, this won't be the case for logistic regression applications, but it's helpful. Here's an example for LRT test of $\large H_0:logit(\pi) = \beta_0$ vs. $\large H_a:logit(\pi) = \beta_0 + \beta_1change$
+
+```{r}
+mod.fit.Ho <- glm(formula = good ~ 1, family = binomial(link = logit), data = placekick)
+mod.fit.Ha <- glm(formula = good~change, family = binomial(link = logit), data = placekick)
+anova(mod.fit.Ho, mod.fit.Ha, test = 'Chisq')
+```
+
+```{r}
+pi.hat.Ho <- mod.fit.Ho$fitted.values
+pi.hat.Ha <- mod.fit.Ha$fitted.values
+y <- placekick$good
+
+stat <- -2*sum(y*log(pi.hat.Ho/pi.hat.Ha) +   
+               (1-y)*log((1-pi.hat.Ho)/(1-pi.hat.Ha))) #-logLRT formula to find chisq values
+pvalue <- 1-pchisq(q = stat, df = 1) #getting pvalue from Chisq distribution
+data.frame(stat, pvalue) #same as above, just using LRT
+```
+
+#### Deviance Vocabulary
+
+**Deviance** is the amount one model deviates from another measured by the transformed LRT statistic $\large -2log(\Lambda)$. For example, when we tested for change, we got 5.246. This basically means the estimated probability of success for the model excluding **change** deviates from those that include **change**.
+
+**Residual deviance** is how the observed proportion of success differs from the model of interest
+
+**Null deviance** is how the probabilities estimated from the null model deviates from the observed proportion of success. Null model : $\large logit(\pi_i) = \beta_0$ . Since this only contains the intercept term, $\large \pi_i$ will always be the same value, the MLE.
+
+Usually the **residual deviance** is an intermediate step for performing LRT to compare two models. Example:
+
+$$
+\large H_0:logit(\pi^{(0)}) = \beta_0 + \beta_1x_1
+$$
+
+$$
+\large H_a:logit(\pi^{(a)}) = \beta_0 + \beta_1x_1 + \beta_2x_2 + \beta_3x_3
+$$
+
+Residual deviance for Ho:
+
+$$
+\large -2log(\Lambda) = -2\Sigma_{i =1 }^n y_ilog\left(\frac{\hat{\pi}_i^{(0)}}{y_i}\right) + (1-y_i)log\left(\frac{1-\hat{\pi}_i^{(0)}}{1-y_i}\right)
+$$
+
+Residual deviance for Ha:$$
+\large -2log(\Lambda) = -2\Sigma_{i =1 }^n y_ilog\left(\frac{\hat{\pi}_i^{(a)}}{y_i}\right) + (1-y_i)log\left(\frac{1-\hat{\pi}_i^{(a)}}{1-y_i}\right)
+$$
+
+Funny enough, if we subtract the residual deviance of Ha by the residual deviance for Ho, we get the LRT function.
+
+Residual deviance for binomial responses $W_j$ for $j = 1,…, J$.$$
+\large -2log(\Lambda) = -2\Sigma_{j =1 }^J \left[w_jlog\left(\frac{\hat{\pi}_j}{w_j/n_j}\right)+(n_j-w_j)log\left(frac{1-\hat{\pi}_j}{1-w_j/n_j}\right)\right]
+$$
+
+##### R Example of testing for WITHOUT using anova()
+
+$$
+\large H_0:logit(\pi^{(0)}) = \beta_0 + \beta_1distance
+$$
+
+$$
+\large H_a:logit(\pi^{(a)}) = \beta_0 + \beta_1change + \beta_2distance
+$$
+
+```{r}
+mod.fit.Ho <- glm(formula = good ~ distance, family = binomial(link = logit), data = placekick)
+df <- mod.fit.Ho$df.residual - mod.fit2$df.residual
+
+stat <- mod.fit.Ho$deviance - mod.fit2$deviance
+pvalue <- 1 - pchisq(q = stat, df = df)
+
+data.frame(Ho.resid.dev = mod.fit.Ho$deviance, Ha.resid.dev = mod.fit2$deviance, df = df, stat = round(stat, 4), pvalue = round(pvalue, 4))
+```
+
+##### **RECAP:** Lots of different ways to perform LRT. Generally, use Anova() and anova(), which are easiest to use.
+
+## Odds ratio
+
+$$
+\large OR = \frac{Odds_{x+c}}{Odds_x} = \frac{exp(\beta_0+\beta_1(x+c))}{exp(B_0+B_1x)}=exp(c\beta_1)
+$$
+
+where c \> 0 and is the increase of a variable holding all other variables constant.
+
+$$
+\large \widehat{OR} = exp(c\hat{\beta}_1)
+$$
+
+Since this is an estimated odds ratio, we have to make CI to make inferences with a level of confidence.
+
+**Wald CI when n \>= 40:**
+
+First find $\large \widehat{Var}(\hat{\beta}_1)$ first from estimated covariance matrix. Then:
+
+$$
+\large exp\left(c\hat{\beta}_1 \pm cZ_{1-a}\sqrt{\widehat{Var}(\hat{\beta}_1)}\right)
+$$
+
+Inside the square root should be Var(cB1), but property of variance let us square it and bring it out.
+
+So interpretation should be:\
+"With (1-a)100% confidence, the odds of a success change by an amount between"lower" to "upper" times for every c-unit increase in x."
+
+**Likelihood Ratio (LR) when n \< 40:**
+
+$$
+\large -2log\left(\frac{L(\tilde{\beta}_0, \beta_1 | y_1,...,y_n)}{L(\hat{\beta}_0,\hat{\beta}_1|y_1,...,y_n)}\right)  < \chi_1^2,_{1-a}
+$$
+
+where $\tilde{\beta}_0$ is the MLE of $\beta_0$. You also gotta use some iterative numerical procedure to find lower and upper limits. After limits are found, we have to do this:
+
+$$
+\large exp(c\times lower) < OR< exp(c\times upper)
+$$
+
+```{r}
+#Odds ratio
+exp(mod.fit$coefficients[2])
+exp(-10*mod.fit$coefficients[2]) #when distance coefficient decreases by -10, the odds of a success changes by 3.15 times for every -10 decrease in x
+```
+
+#### **LR Code**
+
+```{r}
+beta.ci <- confint(object = mod.fit, parm = 'distance', level = 0.95) #automatically finds CI with LR
+beta.ci
+
+rev(exp(-10*beta.ci)) #OR C.I. for c = -10. #remember we have to multiply the limits by c and take the exp
+
+#remove lables with as.numeric()
+as.numeric(rev(exp(-10*beta.ci)))
+```
+
+With the code above, we say that with 95% confidence, the odds increase by between 2.69 and 3.73 when distance is decreased by -10 yards.
+
+#### Wald CI Code
+
+```{r}
+beta.ci <- confint.default(object = mod.fit, parm = 'distance', level = 0.95)
+beta.ci
+
+rev(1/exp(beta.ci*10)) #invert OR C.I. for c = 10. We invert cuz it's OR is less than one
+```
+
+##### Wald CI Code By Applying Formula (Hard Way):
+
+```{r}
+beta.ci <- mod.fit$coefficients[2] + qnorm(p = c(0.025, 0.975)) * sqrt(vcov(mod.fit)[2,2])
+beta.ci
+rev(1/exp(beta.ci*10))
+```
+
+##### LR Code Without confint(). Super difficult and unecessary
+
+```{r}
+# Examples of how to find profile likelihood ratio intervals without confint()
+
+  # Example of how to estimate the model logit(pi) = beta~_0 + beta_1*distance where beta_1*x is held constant and beta_1 = -0.12.
+  #  The offset() function instructs R to not estimate a coefficient for beta1*x1 in the model (treat it as a constant). 
+  #  Because there is only beta_0 remaining in the model, we need to use the "1" to tell R to estimate beta_0. 
+  mod.fit.ex<-glm(formula = good ~ 1 + offset(-0.12*distance), family = binomial(link = logit), data = placekick)
+  mod.fit.ex$coefficients
+  logLik(mod.fit.ex)
+  as.numeric(-2*(logLik(mod.fit.ex) - logLik(mod.fit)) - qchisq(p=0.95, df = 1))
+
+  ########################
+  # EXAMPLE using uniroot() to find the profile LR interval
+  
+    # Calculate -2log(Lambda) - 3.84
+    find.root<-function(beta1, data.set, logLik.denom) {
+      mod.fit.temp<-glm(formula = good ~ 1 + offset(beta1*distance), family = binomial(link = logit), data = data.set)
+      as.numeric(-2*(logLik(mod.fit.temp)- logLik.denom) - qchisq(p=0.95, df = 1))
+    }
+
+    # Test
+    find.root(beta1 = -0.12, data.set = placekick, logLik.denom = logLik(mod.fit))
+    find.root(beta1 = -0.1318144, data.set = placekick, logLik.denom = logLik(mod.fit))  # Bound from confint()
+    find.root(beta1 = -0.09907103, data.set = placekick, logLik.denom = logLik(mod.fit))  # Bound from confint()
+
+    # Use uniroot
+    save.lower<-uniroot(f = find.root, interval = c(-0.15, mod.fit$coefficients[2]), data.set = placekick, logLik.denom = logLik(mod.fit))
+    save.upper<-uniroot(f = find.root, interval = c(mod.fit$coefficients[2], -0.05), data.set = placekick, logLik.denom = logLik(mod.fit))
+    save.lower
+    save.upper
+
+    # OR interval
+    round(1/c(exp(10*save.upper$root), exp(10*save.lower$root)), 4) 
+```
+
+## Probability of success
+
+We now estimate $\pi$ and make inferences about our estimate with CI's:
+
+$$
+\large \hat{\pi} = \frac{exp(\hat{\beta}_0 + \hat{\beta}_1x_1+...+\hat{\beta}_px_p)}{1+exp(\hat{\beta}_0+\hat{\beta}_1x_1+...+\hat{\beta}_px_p)}
+$$
+
+#### **Wald**
+
+$$
+\large \hat{\beta}_0 + \hat{\beta}_1x \pm Z_{1-a/2}\sqrt{\widehat{Var}(\hat{\beta}_0 + \hat{\beta}_1x)}
+$$
+
+Estimated variance:\
+
+$$
+\large \widehat{Var}(\hat{\beta}_0+\hat{\beta}_1x) = \widehat{Var}(\hat{\beta}_0) + x^2\widehat{Var}(\hat{\beta}_1)+2x\widehat{Cov}(\hat{\beta}_0, \hat{\beta}_1)
+$$
+
+and then you transform it to fit logistic regression by the familiar exp(.)/[1+exp(.)]. **This is the Wald's CI for success.**
+
+$$
+\large \frac{
+exp\left(
+\hat{\beta}_0 + \hat{\beta}_1x \pm Z_{1-a/2}\sqrt{\widehat{Var}(\hat{\beta}_0 + \hat{\beta}_1x)}\right)
+}
+{
+1+exp\left(\hat{\beta}_0 + \hat{\beta}_1x \pm Z_{1-a/2}\sqrt{\widehat{Var}(\hat{\beta}_0 + \hat{\beta}_1x)}\right)
+}
+$$
+
+#### LR. Use mcprofile package.
+
+```{r}
+install.packages('mcprofile')
+library('mcprofile')
+```
+
+Basically LR but its harder now czu you're maximizing with bunch of different variables. Iterative numerical procedures take a long time. BUT if you do it that way, you have to transform the Ci with exp(.)/[1+exp(.)] like the Wald interval.
+
+**R code to estimate** $\large\pi$
+
+```{r}
+linear.pred <- mod.fit$coefficients[1] + mod.fit$coefficients[2] * 20
+linear.pred
+as.numeric(exp(linear.pred)/(1+exp(linear.pred)))
+
+#Or, the recommended way
+predict.data <- data.frame(distance = 20)
+predict(object = mod.fit, newdata = predict.data, type = 'link') #basically using glm() method from mod.fit
+predict(object = mod.fit, newdata = predict.data, type = 'response')
+```
+
+**R code for Wald Interval for** $\large \hat{\pi}$
+
+```{r}
+alpha <- 0.05
+linear.pred <- predict(object = mod.fit, newdata = predict.data, type = 'link', se=TRUE)
+linear.pred
+
+pi.hat <-exp(linear.pred$fit) / (1 + exp(linear.pred$fit))
+CI.lin.pred <- linear.pred$fit + qnorm(p = c(alpha/2, 1-alpha/2)) * linear.pred$se
+CI.pi <- exp(CI.lin.pred)/(1+exp(CI.lin.pred))
+round(data.frame(predict.data, pi.hat, lower = CI.pi[1], upper = CI.pi[2]), 4)
+```
+
+**R code for LR Interval for** $\large \hat{\pi}$ **for more than one distance.**
+
+```{r}
+library(package = mcprofile)
+K <- matrix(data = c(1, 20), nrow = 1, ncol = 2) #B_0 = 1, B_1 = 20
+K
+
+#Calculate -2log(Lambda)
+linear.combo <- mcprofile(object = mod.fit, CM = K) #CM = contrast matrix
+#CI for beta_0 + beta_1 *x
+ci.logit.profile <- confint(object = linear.combo, level = 0.95)
+ci.logit.profile
+
+names(ci.logit.profile)
+
+exp(ci.logit.profile$confint)/(1 + exp(ci.logit.profile$confint))
+exp(ci.logit.profile$estimate)/(1 + exp(ci.logit.profile$estimate))
+```
+
+#### Plot of Wald Estimate and CI of success parameter
+
+```{r}
+head(w.n)
+
+# Bubbles to show how many were sampled at a particular distance
+symbols(x = w$distance, y = w$good/n$good, circle = sqrt(n$good), inches = 0.5, xlab = 'Distance (yards)', ylab = 'Estimated probability', panel.first = grid(col = 'gray', lty = 'dotted'))
+
+curve(expr=predict(object = mod.fit, newdata = data.frame(distance = x), type = 'response'), col = 'red', add= TRUE, xlim = c(18,66))
+
+#CI bands
+ci.pi <- function(newdata, mod.fit.obj, alpha){
+  linear.pred <- predict(object = mod.fit.obj, newdata = newdata, type ='link', se= TRUE)
+  CI.lin.pred.lower <- linear.pred$fit-qnorm(p = 1-alpha/2)*linear.pred$se
+  CI.lin.pred.upper <- linear.pred$fit + qnorm(p = 1-alpha/2)*linear.pred$se
+  CI.pi.lower <- exp(CI.lin.pred.lower)/(1 + exp(CI.lin.pred.lower))
+  CI.pi.upper <- exp(CI.lin.pred.upper) / (1 + exp(CI.lin.pred.upper))
+  list(lower = CI.pi.lower, upper = CI.pi.upper)
+}
+
+#test case
+ci.pi(newdata= data.frame(distance = 20), mod.fit.obj = mod.fit, alpha = 0.05)
+
+#Plot CI bands
+curve(expr = ci.pi(newdata = data.frame(distance = x),
+                     mod.fit.obj = mod.fit, alpha = 0.05)$lower, col = 'blue', lty = 'dotdash', add = TRUE, xlim = c(18, 66))
+
+curve(expr = ci.pi(newdata = data.frame(distance = x), mod.fit.obj = mod.fit, alpha = 0.05)$upper, col = 'blue', lty = 'dotdash', add = TRUE, xlim = c(18,66))
+
+
+# Legend
+legend(x = 20, y = .4, legend = c("Logistic regression model", "95%
+individual C.I.") , lty = c("solid", "dotdash") , col = c("red" ,
+"blue") , bty = "n")
+```
+
+Yes, some are off, but not that many. There are only so many observations at a particular distance value so its hard for the model to fit well with those values. Our model isn't as bad as we think.
+
+There is also a LR version for the plot thats similar. It will not be coded.

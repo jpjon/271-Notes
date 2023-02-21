@@ -1,0 +1,376 @@
+# Time Series Characteristics (wrong book)
+
+Time series is weird. Especially because the points in time are (most likely) heavily influenced by adjacent points. This makes it difficult to not violate the assumptions of independence and IID. So, what we gotta do is **time series analysis.**
+
+For now, keep in mind tat there are two separate, but not mutually exclusive, time series analysis, the **time domain approach** and the **frequency domain approach.**
+
+The **TSA** book gives many, many examples. I will only have formulas in this notebook from that book.
+
+### Measures of Dependence
+
+Measures that describe the general behavior of a process as it evolves over time.
+
+#### **Mean function:**
+
+$$
+\large \mu_{xt} = E(x_t)
+$$
+
+**Use examples:**
+
+Mean function of a Moving Average Series:
+
+If w_t denotes a white noise series, then $\large \mu_{wt} = E(w_t) = 0$ for all t. Smoothing the series does not change the mean because we can write
+
+$$
+\large \mu_{vt} = E(v_t) = \frac{1}{3}\left[E(w_{t-1} + E(w_t) = E(w_{t+1})
+\right
+] = 0
+$$
+
+Mean function of a Random Walk with Drift:
+
+Consider the random walk with drift model:
+
+$$
+\large x_t = \delta t + \Sigma^t_{j=1}w_j, \; t = 1,2,...
+$$
+
+Because $\large E(w_t) = 0$ for all t, and delta is a constant, we have
+
+$$
+\large \mu_{xt} = E(x_t) = \delta t + \Sigma^t_{j=1}E(w_j) = \delta t
+$$
+
+which is a straight line with slope delta.
+
+#### Autocovariance function
+
+Also known as the second moment product. This is to address the lack of independence between two adjecent values $\large x_s$ and $\large x_t$:
+
+$$
+\large \gamma_x(s,t) = cov(x_s, x_t) = E\left[(x_s - \mu_s)(x_t - \mu_t)\right]
+$$
+
+for all s and t.
+
+When s = t:
+
+$$
+\large \gamma_x(t,t) = E\left[(x_t-\mu_t)^2\right] = var(x_t)
+$$
+
+Case examples:
+
+Autocovariance of white noise:
+
+The white noise series w_t has E(w_t) = 0 and
+
+$$
+\large \gamma_w(s,t) = cov(w_s, w_t) = \sigma^2_w \;\;s=t, 0 \;\;s\neq t
+$$
+
+#### Autocorrelation Function (ACF)
+
+$$
+\large \rho(s,t) = \frac{\gamma(s,t)}{\sqrt{\gamma(s,s)\gamma(t,t)}}
+$$
+
+#### Cross-covariance function
+
+between two series, x_t, and y_t,
+
+$$
+\large \gamma_{xy}(s,t) = cov(x_s, y_t)= E\left[(x_s-\mu_{xs})(y_t-\mu_{yt})\right]
+$$
+
+#### Cross-correlation function (CCF)
+
+$$
+\large \rho_{xy}(s,t) = \frac{\gamma_{xy}(s,t)}{\sqrt{\gamma_x(s,s)\gamma_y(t,t)}}
+$$
+
+### Stationary Time Series
+
+A **strictly stationary** time series is one which the same probabilistic behavior of every collection of values and shifted values.
+
+The book is impossible to read.
+
+# Time Series Data (Correct Book)
+
+When a variable is measured sequentially in time over or at a fixed interval, known as the sampling interval, the resulting data form a time series.
+
+```{r}
+AP <- AirPassengers
+AP
+```
+
+```{r}
+class(AP)
+start(AP); end(AP); frequency(AP) #methods for ts class
+```
+
+```{r}
+summary(AP)
+```
+
+```{r}
+plot(AP, ylab = "Passengeres (1000's")
+#clear seasonal variation with postitve trend
+```
+
+```{r}
+layout(1:2)
+plot(aggregate(AP)) #by year
+boxplot(AP ~ cycle(AP)) #extracts the seasons
+```
+
+```{r}
+Maine.month <- read.table("./Data/Maine.dat", header = TRUE) #read as regular table
+
+attach(Maine.month) #no idea what this does. Allows you to directly access columns?
+Maine.month
+```
+
+```{r}
+Maine.month.ts <- ts(unemploy, start = c(1996, 1), freq = 12) #have to turn to ts
+Maine.month.ts
+```
+
+```{r}
+Maine.annual.ts <- aggregate(Maine.month.ts) / 12 # mean annual rate
+Maine.annual.ts
+```
+
+```{r}
+layout(1:2)
+plot(Maine.month.ts, ylab = "unemployed (%)")
+plot(Maine.annual.ts, ylab = "unemployed (%)")
+```
+
+```{r}
+#Window lets us select a time
+Maine.Feb <- window(Maine.month.ts, start = c(1996, 2), freq = TRUE) #start at 1996 and stick to February, set when freq = TRUE
+Maine.Aug <- window(Maine.month.ts, start = c(1996, 8), freq = TRUE) #start at 1996 and stick to August, set when freq = TRUE
+Feb.ratio <- mean(Maine.Feb) / mean(Maine.month.ts)
+Aug.ratio <- mean(Maine.Aug) / mean(Maine.month.ts)
+
+Feb.ratio # On average, unemployment is 22% higher in February
+Aug.ratio # 18% lower in August
+#Explanation of Maine attracting tourists in the summer, creating new jobs
+```
+
+```{r}
+#Data on monthly unemployment rate for all of the United States
+US.month <- read.table("./Data/USunemp.dat", header = TRUE)
+attach(US.month)
+US.month.ts <- ts(USun, start = c(1996, 1), end = c(2006, 10), freq = 12)
+plot(US.month.ts, ylab = 'unemployed(%)')
+```
+
+### Multiple Time Series
+
+```{r}
+CBE <- read.table("./Data/cbe.dat", header = T)
+CBE[1:4, ]
+```
+
+```{r}
+#If you omit end, R uses the full length of the vector, if you omit the month in start, R automatically assumes 1
+Elec.ts <- ts(CBE[, 3], start = 1958, freq = 12)
+Beer.ts <- ts(CBE[, 2], start = 1958, freq = 12)
+Choc.ts <- ts(CBE[,1], start = 1958, freq = 12)
+plot(cbind(Elec.ts, Beer.ts, Choc.ts))
+
+```
+
+### Intersects of multiple time series
+
+```{r}
+#Intersection between air passenger data and the electricity data
+AP.elec <- ts.intersect(AP, Elec.ts) #combining them in one ts object
+start(AP.elec)
+end(AP.elec)
+AP.elec[1:3,]
+```
+
+```{r}
+#extract and plot
+
+AP <- AP.elec[,1]; Elec <- AP.elec[,2]
+
+layout(1:2)
+plot(AP, main = "", ylab = "Air passengers / 1000's")
+plot(Elec, main = "", ylab = "Electricity production/ MkWh")
+
+plot(as.vector(AP), as.vector(Elec), #as.vector needed to convert ts objects to ordinary vectors
+               xlab = "Air passengers / 1000's",
+               ylab = "Electricity production / MkWh")
+abline(reg = lm(Elec ~ AP))
+cor(AP, Elec)
+```
+
+```{r}
+#stochastic trend. very random
+Z <- read.table("./Data/pounds_nz.dat", header = T)
+Z.ts <- ts(Z, st =1991, fr = 4) #make it quarterly
+plot(Z.ts, xlab = "time / years", 
+     ylab = "Quartlery exchange rate in $NZ / pound")
+```
+
+```{r}
+#two local trends when series is partitioned into two subseries
+
+Z.92.96 <- window(Z.ts, start = c(1992, 1), end = c(1996, 1))
+Z.96.98 <- window(Z.ts, start = c(1996, 1), end = c(1998, 1))
+
+layout(1:2)
+plot(Z.92.96, ylab = "Exchange rate in $NZ/pound",
+     xlab = "Time (years)")
+plot(Z.96.98, ylab = "Exchange rate in $NZ/pounds",
+     xlab = "Time (years)")
+```
+
+```{r}
+Global <- scan(file = "./Data/global.dat")
+Global.ts <- ts(Global, st = c(1856, 1), end = c(2005, 12),
+                fr = 12)
+Global.annual <- aggregate(Global.ts, FUN = mean) #mean of each year
+plot(Global.ts)
+plot(Global.annual)
+```
+
+```{r}
+
+New.series <- window(Global.ts, start = c(1970, 1), end = c(2005, 12))
+New.time <- time(New.series) #need time as variable
+plot(New.series); abline(reg = lm(New.series ~ New.time)) #using time as variable to describe new.series
+```
+
+### Decomposition of Series
+
+Simple additive decomposition model :
+
+$$
+\large x_t = m_t + s_t + z_t
+$$
+
+where x_t is the observed series, m_t is the trend, s_t is the season effect, and z_t is an error term that is, in general, a sequence of correlated R.V.s with mean zero
+
+If the seasonal effect tends to increase as the trend increases, a multiplicative model may be more appropriate:
+
+$$
+\large x_t = m_t \cdot s_t + z_t
+$$
+
+If the random variation is modellled by a multiplicative factor and the variable is positive, an additive decomposition model for log(x_t) can be sued:
+
+$$
+\large log(x_t) = m_t + s_t + z_t
+$$
+
+If the random series z_t are normally distributed with mean 0 and variance sigma\^2, then the predicted mean value at time is:
+
+$$
+\large \hat{x}_t = e^{m_t + s_t}e^{\frac{1}{2}\sigma^2}
+$$
+
+### Estimating trends and seasonal effects
+
+A simple way to estimates m_t at time t is to calculate hte moving average centered on x_t. This averages out the seasonal effect.
+
+```{r}
+plot(decompose(Elec.ts))
+Elec.decom <- decompose(Elec.ts, type = "mult")
+plot(Elec.decom)
+Trend<- Elec.decom$trend
+Seasonal <- Elec.decom$seasonal
+ts.plot(cbind(Trend, Trend*Seasonal), lty = 1:2)
+```
+
+## Correlation
+
+```{r}
+Herald.dat <- read.table("./Data/Herald.dat", header = T)
+attach(Herald.dat)
+```
+
+```{r}
+#Calculate covariance
+x <- CO; y <- Benzoa; n <- length(x)
+sum((x - mean(x)) * (y - mean(y))) / (n-1) #sample covariance
+cov(x, y)
+mean((x-mean(x)) * (y-mean(y)))#covariance
+cov(x,y) / sd(x)*sd(y) #sample correlation
+cor(x,y)
+```
+
+```{r}
+#no trend and no seasonal period, assume that hte time series is a realisation of a stationary process
+wave.dat <- read.table("./Data/wave.dat", header = T); attach(wave.dat)
+plot(ts(waveht)); plot(ts(waveht[1:60]))
+
+acf(x)$acf #autocorrelations of x
+acf(waveht)$acf[2] #lag 2
+```
+
+```{r}
+#autocovariances plot
+acf(waveht, type =c('covariance'))$acf[2]
+```
+
+# HA Reading. TS in R
+
+### 2.1 tsibble objects
+
+Creating a data frame with temporal structure.
+
+```{r}
+install.packages('tsibble')
+library(tsibble)
+library(tidyverse)
+y <- tsibble(
+  Year = 2015:2019,
+  Observation = c(123, 39, 78, 52, 110),
+  index = Year
+)
+y
+```
+
+Example of time series processing with R syntax:
+
+```{r}
+prison <- readr::read_csv("https://OTexts.com/fpp3/extrafiles/prison_population.csv")
+head(prison)
+```
+
+We now have to define the time index and the columns which are keys. The remaining columns are values, which in this case is only Count. Also, the data is quarterly, so we need to convert Date variables to quarters.
+
+```{r}
+prison <- prison |> #weird syntax for tsibble objects
+  mutate(Quarter = yearquarter(Date)) |> #converting to quarterly index
+  select(-Date) |> #no longer need date because we now have Quarter
+  as_tsibble(key = c(State, Gender, Legal, Indigenous),
+             index = Quarter) #final step is to tsibblize it
+prison
+```
+
+This tsibble contains 64 separate time series corresponding to the combinations of the 8 states, 2 genders, 2 legal statuses, and 2 indigenous statuses. Each of these series is 48 observations in length, from 2005 Q1 to 2016 Q4.
+
+Also, each of these series need a unique index for each sample. If this isn't the case, the tsibble() or as_tsibble() funciton will return an error.
+
+### 2.2 Time Plots
+
+Observations plotted against the time of observation.
+
+use autoplot(). Check for seasonality vs cycles vs trends (not always mutually exclusive)
+
+### Seasonal plots
+
+Data are plotted against the individual "seasons". Use gg_season().
+
+If data has more than one season pattern, use period argument.
+
+### Seasonal subseries plots
+
+Use gg_subseries
