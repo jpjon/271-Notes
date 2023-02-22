@@ -237,3 +237,207 @@ acf(gtemp, 48, main = "gtemp")
 acf(resid(fit), 48, main = "detrended")
 acf(diff(gtemp), 48, main = "first difference")
 ```
+
+# Regression: 2009 CM Book
+
+The notation is a bit different, but the concept is the same.
+
+A model for a time series $\large{x_t:t = 1,…n}$ is linear if it can be express as:
+
+$$
+\large x_t = \alpha_0 + \alpha_1u_{1,t} + \alpha_2u_{2,t} + ...+\alpha_mu_{m,t} + z_t
+$$
+
+You can do all sorts of thing with this. For example, You can transform non-linear models to be linear models. If you have the model $\large x_t = e^{\alpha_0 + \alpha_{1t}+z_t}$, you can transform the series x_t by taking the natural log and obtain a linear model for the series y_t.
+
+$$
+\large y_t = logx_t = \alpha_0 + \alpha_1t + z_t
+$$
+
+Then you use standard least squares regression to fit the model.
+
+### Stationarity
+
+Linear models for time series are non-stationary when they include functions of time. Differencing can often transform a non-stationary series with a deterministic trend to be a stationary series. For example, with time series x_t given by the straight line function plus white noise $\large x_t = \alpha_0 + \alpha_1t + z_t$ then the first order differences are given by:
+
+$$
+\large \triangledown x_t = x_t - x_{t-1} = z_t - z_{t-1} + \alpha_1
+$$
+
+Differencing basically removes both stochastic and deterministic trends from time series.
+
+```{r}
+set.seed(1)
+z <- w <- rnorm(100, sd= 20)
+for (t in 2:100) z[t] <- 0.8 * z[t-1] + w[t] #white noise is autocorrelated. this is common for the error series to be autocorrelated in time series regression
+Time <- 1:100
+x <- 50 + 3 * Time + z
+plot(x, xlab = "time", type = "l")
+```
+
+The model above can be expressed as $\large x_t = 50 + 3t + z_t$ where z_t is the AR(1) process $\large z_t = 0.8z_{t-1} + w_t$ and w_t is Gaussian white noise with $\large \sigma = 20$ .
+
+### Fitting the model
+
+Linear models are usually fitted by minimizing the sum of squared errors,
+
+$$
+\large \Sigma z^2_t = \Sigma(x_t - \alpha_0 -\alpha_1u_{1,t} - ... - \alpha_mu_{m,t})^2
+$$
+
+```{r}
+x.lm <- lm(x ~ Time) #Automatically does the above
+coef(x.lm)
+
+sqrt(diag(vcov(x.lm))) #standard errors. likely underestimated because of autocorrelation in the residuals
+```
+
+Diagnostic plot of correlogram of the residuals:
+
+```{r}
+acf(resid(x.lm)) #as expected, the residuals are autocorrelated
+pacf(resid(x.lm)) #only lag 1 is significant, suggesting an AR(1) process
+```
+
+Example of fitting a model to the temperature series:
+
+```{r}
+global <- scan(file = "../Data/global.dat")
+Global.ts <- ts(global, st = c(1856, 1), end = c(2005, 12), fr = 12)
+temp <- window(Global.ts, start = 1970) #fitting regression model only from 1970 and onwards
+temp.lm <- lm(temp ~ time(temp))
+coef(temp.lm)
+
+confint(temp.lm)
+
+acf(resid(lm(temp ~ time(temp))))
+```
+
+The C.I. for the slop does not contain zero, so there is statistical evidence of an increasing trend in global temperatures if the autocorrelation in the residuals is negligible. However, the residual series is positively autocorrelated at shorter lags, leading to an underestimate of the standard error and too narrow a C.I. for the slope. Intuitively, the positive correlation between consecutive values reduces the effective record length because similar values will tend to occur together.
+
+### Generalized Least Squares
+
+GLS is used to provide a better estimate for the standard errors fo the regression parameters to accoutn for the autocorrelation in the residual series.
+
+Example in R:
+
+```{r}
+library(nlme)
+x.gls <- gls(x ~ Time, cor = corAR1(0.8))
+coef(x.gls)
+sqrt(diag(vcov(x.gls))) #greater than the lm because it takes autocorrelation into account
+```
+
+Usually, we don't know the AR. We usually fit a linear model first by OLS then read off lag 1 AR off the correlogram plot.
+
+```{r C.I. for trend in temperature series}
+temp.gls <- gls(temp ~ time(temp), cor = corAR1(0.7))
+confint(temp.gls)
+#temp not containing 0 indiciates there is a trend that is significant
+```
+
+### Linear models with seasonal variables
+
+Suppose a time series contains s seasons. For example, a time series of each month, s = 12, whereas a series with 6 months intervals corresponding to summer and winter, s = 2. A seasonal indicator model for a time series $\large x_t = m_t + x_t + z_t$ containing s seasons and a trend m_t is given by:
+
+$$
+\large x_t = m_t + s_t + z_t
+$$
+
+where $\large s_t = \beta_i$ where t falls in the ith season ($\large t = 1, …, n; i = 1,…,s$) and z_t is the residual error series, which may be autocorrelated.
+
+m_t does not have an intercept but could be a polynomial of order p with parameters alpha_1 to alpha_p. These terms depend on the season of s $\large \beta_1,…,\beta_s$ correspond to s possibel constant terms. Therefore the equation can be written as:
+
+$$
+\large x_t = m_t + \beta_{1+(t-1)mod\;s}+z_t
+$$
+
+Example in R:
+
+```{r}
+Seas <- cycle(temp)
+Time <- time(temp)
+temp.lm <- lm(temp ~ 0 + Time + factor(Seas)) #0 is to ensure no intercept
+coef(temp.lm)
+```
+
+Predictions for the above model:
+
+```{r}
+new.t <- seq(2006, len = 2* 12, by = 1/12)
+alpha <- coef(temp.lm)[1]
+beta <- rep(coef(temp.lm)[2:13], 2)
+(alpha * new.t + beta)[1:4]
+```
+
+Alternatively you can use the predict function:
+
+```{r}
+new.t <- seq(2006, len = 2* 12, by = 1/12)
+new.dat <- data.frame(Time = new.t, Seas = rep(1:12, 2))
+predict(temp.lm, new.dat)[1:24]
+```
+
+### Logarithmic transformations
+
+$$
+\large y_t = logx_t = logm'_t + logs'_t + logz'_t = m_t + s_t + z_t
+$$
+
+Where m is the trend, s is the seasonal effect, and z is the residual error.
+
+If you want to do this, then x_t must take on only positive values for all of t.
+
+R Example:
+
+```{r}
+data(AirPassengers)
+AP <- AirPassengers
+plot(AP)
+plot(log(AP))
+```
+
+The variance increases with time. However, after the log transformation, the variance is approximately constant over the period of the record. Therefore, since the number of people must be positive, the logarithm would be appropriate with this time series.
+
+### Non-linear models
+
+Used sometimes for appropriate time series. If there are negative values, add a c constant to all so there are none.
+
+```{r}
+set.seed(1)
+w <- rnorm(100, sd = 10)
+z <- rep(0, 100)
+for (t in 2:100) z[t] <- 0.7 * z[t - 1] + w[t]
+Time <- 1:100
+f <- function(x) exp(1 + 0.05 * x)
+x <- f(Time) + z
+plot(x, type = "l")
+abline(0,0)
+```
+
+```{r}
+x.nls <- nls(x ~ exp(alp0 + alp1 * Time), start = list(alp0 = 0.1, alp1 = 0.5))
+summary(x.nls)$parameters
+```
+
+### Forecasting from regression
+
+Forecasting from a regression model can only be done if the the past trends are expected to continue into the future
+
+```{r}
+# > new.t <- time(ts(start = 1961, end = c(1970, 12), fr = 12))
+# > TIME <- (new.t - mean(time(AP)))/sd(time(AP))
+# > SIN <- COS <- matrix(nr = length(new.t), nc = 6)
+# > for (i in 1:6) {
+# COS[, i] <- cos(2 * pi * i * new.t)
+# SIN[, i] <- sin(2 * pi * i * new.t)
+# }
+# > SIN <- SIN[, -6]
+# > new.dat <- data.frame(TIME = as.vector(TIME), SIN = SIN,
+# COS = COS)
+# > AP.pred.ts <- exp(ts(predict(AP.lm2, new.dat), st = 1961,
+# fr = 12))
+# > ts.plot(log(AP), log(AP.pred.ts), lty = 1:2)
+```
+
+### Inverse transform and bias correction
